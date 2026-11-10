@@ -24,6 +24,31 @@ i digues a l'aplicació on és (`TGDL_STORAGE_SENTINEL=/data/.tgdl-nas`). Mentre
 
 ## 2. El servei a Docker Compose
 
+### Amb el script (recomanat)
+
+[deploy/install-lxc.sh](../deploy/install-lxc.sh) fa els passos 1 i 2 sol, dins el contenidor LXC i
+com a root:
+
+```bash
+bash install-lxc.sh
+```
+
+1. Comprova que `/mnt/Plex` està muntat (si no, s'atura sense tocar res) i crea el sentinella.
+2. Baixa el codi a `/opt/media/src/telegram-downloader` (o l'actualitza).
+3. Fa una còpia de `docker-compose.yml` (`docker-compose.yml.bak-<data>`), hi afegeix el servei
+   **un sol cop**, amb l'ancoratge `&env` i `/mnt/Plex:/data`, i el valida amb
+   `docker compose config`. Si el resultat no és vàlid, restaura la còpia.
+4. Construeix la imatge i engega **només** aquest servei: la resta de l'stack no es reinicia.
+
+Per actualitzar a una versió nova, torna'l a executar. Variables: `COMPOSE_FILE`, `NAS_DIR`,
+`REPO_URL`, `BRANCH`, `PORT`.
+
+Mentre el repositori sigui privat, el contenidor necessita permís de lectura: una clau de desplegament
+(`REPO_URL=git@github.com:Uriracer/telegram_downloader.git`) o un token de GitHub de només lectura, que
+`git` et demanarà com a contrasenya.
+
+### A mà
+
 Afegeix a `/opt/media/docker-compose.yml`, sota `services:`, el fragment de
 [deploy/media-stack-snippet.yml](../deploy/media-stack-snippet.yml):
 
@@ -45,7 +70,7 @@ Afegeix a `/opt/media/docker-compose.yml`, sota `services:`, el fragment de
 ```
 
 Mentre no hi hagi cap versió publicada a GHCR, canvia `image:` per
-`build: https://github.com/Uriracer/telegram-downloader.git#main`.
+`build: https://github.com/Uriracer/telegram_downloader.git#main`.
 
 ```bash
 cd /opt/media && docker compose up -d telegram-downloader

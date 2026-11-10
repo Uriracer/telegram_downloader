@@ -48,7 +48,7 @@ RUN pip install --no-deps . \
 FROM python:${PYTHON_VERSION}-slim
 ARG VERSION=dev
 ARG REVISION=unknown
-ARG SOURCE=https://github.com/Uriracer/telegram-downloader
+ARG SOURCE=https://github.com/Uriracer/telegram_downloader
 LABEL org.opencontainers.image.title="Telegram Downloader" \
       org.opencontainers.image.description="Recupera els fitxers dels teus xats de Telegram cap a Jellyfin, Sonarr i Radarr" \
       org.opencontainers.image.version="${VERSION}" \

@@ -1,0 +1,48 @@
+name: media
+
+x-env: &env
+  PUID: "1000"
+  PGID: "1000"
+  TZ: Europe/Madrid
+
+services:
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    environment: *env
+    volumes: [./config/prowlarr:/config]
+    ports: ["9696:9696"]
+    restart: unless-stopped
+
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    environment: *env
+    volumes: [./config/sonarr:/config, /mnt/Plex:/data]
+    ports: ["8989:8989"]
+    restart: unless-stopped
+
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    environment: *env
+    volumes: [./config/radarr:/config, /mnt/Plex:/data]
+    ports: ["7878:7878"]
+    restart: unless-stopped
+
+  3cat-downloader:
+    image: ghcr.io/uriracer/3cat-downloader:0.5.0
+    container_name: 3cat-downloader
+    environment: { <<: *env, UMASK: "002", TRESDL_DOWNLOAD_DIR: /data/Descarregues/3cat }
+    volumes: [./config/3cat-downloader:/config, /mnt/Plex:/data]
+    ports: ["8765:8765"]
+    restart: unless-stopped
+
+  seerr:
+    image: ghcr.io/seerr-team/seerr:latest
+    container_name: seerr
+    init: true
+    environment: { TZ: Europe/Madrid, LOG_LEVEL: info }
+    volumes: [./config/seerr:/app/config]
+    ports: ["5055:5055"]
+    restart: unless-stopped

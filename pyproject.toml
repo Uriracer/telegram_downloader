@@ -28,8 +28,8 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Uriracer/telegram-downloader"
-Issues = "https://github.com/Uriracer/telegram-downloader/issues"
+Homepage = "https://github.com/Uriracer/telegram_downloader"
+Issues = "https://github.com/Uriracer/telegram_downloader/issues"
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "pyyaml>=6.0", "build>=1.2"]

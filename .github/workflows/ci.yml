@@ -44,7 +44,7 @@ jobs:
       - name: ShellCheck
         run: |
           python -m pip install shellcheck-py
-          shellcheck -s sh docker/entrypoint.sh
+          shellcheck -s sh docker/entrypoint.sh && shellcheck deploy/install-lxc.sh
       - name: Hadolint
         uses: hadolint/hadolint-action@v3.1.0
         with:

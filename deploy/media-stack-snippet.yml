@@ -3,7 +3,7 @@
 # i el mateix volum /mnt/Plex:/data que Sonarr i Radarr: no cal cap Remote Path Mapping.
 #
 # Mentre no hi hagi imatge publicada, construeix-la des del repositori:
-#   build: https://github.com/Uriracer/telegram-downloader.git#main
+#   build: https://github.com/Uriracer/telegram_downloader.git#main
 # en lloc de la línia «image:».
 
   telegram-downloader:
