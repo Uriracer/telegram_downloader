@@ -1,0 +1,16 @@
+.git
+.github
+.venv
+venv
+build
+dist
+docs
+deploy
+tests
+**/__pycache__
+**/*.pyc
+.pytest_cache
+*.log
+*.session
+Dockerfile
+.dockerignore

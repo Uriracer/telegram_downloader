@@ -1,0 +1,30 @@
+# Telegram Downloader — exemple mínim amb Docker Compose.
+#
+#   1. Ajusta PUID/PGID (ordre «id» a l'amfitrió) i les carpetes.
+#   2. docker compose up -d   →   obre http://<ip-del-servidor>:8766/
+#
+# La primera vegada et demanarà que creïs una contrasenya, i després que entris a Telegram.
+services:
+  telegram-downloader:
+    image: ghcr.io/uriracer/telegram-downloader:latest
+    container_name: telegram-downloader
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      UMASK: "002"
+      TZ: Europe/Madrid
+      TGDL_DOWNLOAD_DIR: /data/Descarregues/telegram
+      TGDL_LIBRARY_TV: /data/Series
+      TGDL_LIBRARY_MOVIES: /data/Pelicules
+      # Fitxer que només existeix quan el NAS està muntat (crea'l un cop: touch /mnt/Plex/.tgdl-nas)
+      TGDL_STORAGE_SENTINEL: /data/.tgdl-nas
+      # Opcional: credencials de https://my.telegram.org (si no, es posen des del navegador)
+      # TGDL_API_ID: "1234567"
+      # TGDL_API_HASH: "0123456789abcdef0123456789abcdef"
+    volumes:
+      - ./config/telegram-downloader:/config   # configuració, sessió de Telegram, base de dades
+      - /mnt/Plex:/data                         # el mateix camí que Sonarr i Radarr
+    ports:
+      - "8766:8766"
+    restart: unless-stopped
+    stop_grace_period: 30s

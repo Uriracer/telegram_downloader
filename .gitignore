@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+build/
+dist/
+
+# Local runtime data (never commit a Telegram session: it is the account)
+*.session
+*.session-journal
+*.db
+*.db-wal
+*.db-shm
+*.log
+settings.json
+instance.json
+instance.lock
+secret.key
+.env
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

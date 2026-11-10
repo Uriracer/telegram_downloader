@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "telegram-downloader"
+dynamic = ["version"]
+description = "Recupera els fitxers dels teus xats i canals de Telegram cap a Jellyfin, Sonarr i Radarr."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Uriracer" }]
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "httpx>=0.27",
+    "telethon>=1.40,<2",
+    "cryptg>=0.4",
+    "segno>=1.6",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Environment :: Web Environment",
+    "Natural Language :: Catalan",
+    "Topic :: Multimedia :: Video",
+]
+
+[project.urls]
+Homepage = "https://github.com/Uriracer/telegram-downloader"
+Issues = "https://github.com/Uriracer/telegram-downloader/issues"
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pyyaml>=6.0", "build>=1.2"]
+
+[project.scripts]
+tgdl = "tgdl.cli:main"
+telegram-downloader = "tgdl.cli:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["tgdl*"]
+
+[tool.setuptools.package-data]
+tgdl = ["web/*"]
+
+[tool.setuptools.dynamic]
+version = { attr = "tgdl.__version__" }

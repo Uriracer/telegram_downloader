@@ -1,0 +1,23 @@
+{
+  "me": {"id": 777, "name": "Oriol Prova", "username": "prova", "phone": "34600000000", "premium": true},
+  "authorized": false,
+  "code": "12345",
+  "password": "",
+  "qr_auto_approve": 4,
+  "dialogs": [
+    {"id": -1001111111111, "title": "El Detectiu Conan - Còpia de seguretat completa (1996-2024) en català", "kind": "channel",
+     "files": [
+       {"msg_id": 2, "file_name": "poster.jpg", "size": 120000},
+       {"msg_id": 3, "file_name": "Animelliure_DC_001_Multi_Audio+Subs_Forzados_V2_96D508D8.rar", "size": 498000000, "text": "Capítol 1"},
+       {"msg_id": 4, "file_name": "13x501_El_xoc_entre_el_vermell_i_el_negre_La_sospita_D4BAF093.rar", "size": 512000000},
+       {"msg_id": 5, "file_name": "10x424-El fotomissatge del pallasso [DADCAEE6].rar", "size": 505000000},
+       {"msg_id": 6, "file_name": "Animelliure_TotsRucs_El_Detectiu_Conan_525_720pCat_Jap+Subs_ForçatsB8C16FEA.rar", "size": 530000000},
+       {"msg_id": 7, "file_name": "DC-928 (El vermell de l'amor) [70BF1E30].part1.rar", "size": 1048576000},
+       {"msg_id": 8, "file_name": "DC-928 (El vermell de l'amor) [70BF1E30].part2.rar", "size": 312000000},
+       {"msg_id": 9, "file_name": "DC-1004 (Nus) [5A052F3A].rar", "size": 540000000}
+     ]},
+    {"id": -1002222222222, "title": "Hawai 5.0 (castellano)", "kind": "channel", "files": []},
+    {"id": 777, "title": "Missatges desats", "kind": "self"},
+    {"id": 42, "title": "Una persona", "kind": "user", "username": "algu"}
+  ]
+}

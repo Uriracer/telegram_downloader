@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests (${{ matrix.os }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, python: "3.11" }
+          - { os: ubuntu-latest, python: "3.13" }
+          - { os: windows-latest, python: "3.11" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - name: Install dependencies
+        run: python -m pip install -r requirements-dev.txt pytest-github-actions-annotate-failures
+      - name: Run tests (Telegram is always the fake one in CI)
+        run: python -m pytest -m "not live" -q
+
+  lint:
+    name: Lint (shell, Dockerfile, workflows, JavaScript)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: ShellCheck
+        run: |
+          python -m pip install shellcheck-py
+          shellcheck -s sh docker/entrypoint.sh
+      - name: Hadolint
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+      - name: actionlint
+        run: |
+          python -m pip install actionlint-py
+          actionlint
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: JavaScript syntax
+        run: node --input-type=module --check < tgdl/web/app.js
+
+  docker:
+    name: Docker image (build + smoke test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build (linux/amd64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: telegram-downloader:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Smoke test
+        run: |
+          mkdir -p "$RUNNER_TEMP/config" "$RUNNER_TEMP/nas"
+          # NAS "not mounted": the sentinel is missing, so nothing may be created under /data.
+          docker run -d --name tgdl -p 8766:8766 \
+            -e PUID="$(id -u)" -e PGID="$(id -g)" \
+            -e TGDL_DOWNLOAD_DIR=/data/Descarregues/telegram -e TGDL_STORAGE_SENTINEL=/data/.tgdl-nas \
+            -v "$RUNNER_TEMP/config:/config" -v "$RUNNER_TEMP/nas:/data" \
+            telegram-downloader:ci
+          for _ in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:8766/api/health && break
+            sleep 1
+          done
+          echo
+          curl -fsS http://127.0.0.1:8766/api/auth/status | tee status.json
+          grep -q '"mode":"server"' status.json
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8766/api/settings)" = 401
+          docker exec tgdl 7zz i | head -n 3
+          test -z "$(ls -A "$RUNNER_TEMP/nas")"   # nothing written to the "unmounted" share
+          docker logs tgdl 2>&1 | grep -q "no està muntat"
+          test "$(docker inspect --format '{{.State.Health.Status}}' tgdl)" != unhealthy
+          docker stop tgdl
+          docker logs tgdl 2>&1 | tail -n 20
+          docker logs tgdl 2>&1 | grep -q "Aturat."
+          test "$(docker inspect --format '{{.State.ExitCode}}' tgdl)" = 0
+          test -f "$RUNNER_TEMP/config/settings.json"
+          test "$(stat -c %u "$RUNNER_TEMP/config/settings.json")" = "$(id -u)"

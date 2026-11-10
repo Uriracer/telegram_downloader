@@ -1,0 +1,22 @@
+# Fragment per afegir a /opt/media/docker-compose.yml (sota «services:»).
+# Fa servir l'ancoratge &env que ja hi tens (PUID/PGID 1000, TZ Europe/Madrid)
+# i el mateix volum /mnt/Plex:/data que Sonarr i Radarr: no cal cap Remote Path Mapping.
+#
+# Mentre no hi hagi imatge publicada, construeix-la des del repositori:
+#   build: https://github.com/Uriracer/telegram-downloader.git#main
+# en lloc de la línia «image:».
+
+  telegram-downloader:
+    image: ghcr.io/uriracer/telegram-downloader:latest
+    container_name: telegram-downloader
+    environment:
+      <<: *env
+      UMASK: "002"
+      TGDL_DOWNLOAD_DIR: /data/Descarregues/telegram
+      TGDL_LIBRARY_TV: /data/Series
+      TGDL_LIBRARY_MOVIES: /data/Pelicules
+      TGDL_STORAGE_SENTINEL: /data/.tgdl-nas
+    volumes: [./config/telegram-downloader:/config, /mnt/Plex:/data]
+    ports: ["8766:8766"]
+    restart: unless-stopped
+    stop_grace_period: 30s

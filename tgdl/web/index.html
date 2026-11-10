@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="ca">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Everything is local: no CDN, no inline scripts. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none';">
+  <meta name="color-scheme" content="light dark">
+  <title>Telegram Downloader</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="extra.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Salta al contingut</a>
+
+  <header class="topbar">
+    <div class="brand">
+      <svg class="brand-logo" viewBox="0 0 32 32" width="28" height="28" aria-hidden="true" focusable="false">
+        <rect width="32" height="32" rx="8" class="brand-logo-bg"/>
+        <path d="M7 15.5l17-7-3 16-5.5-4.5-3 3v-5l8-7-10 6z" class="brand-logo-fg"/>
+      </svg>
+      <span class="brand-name">Telegram <span class="brand-sub">Downloader</span></span>
+    </div>
+
+    <nav class="nav" aria-label="Seccions">
+      <button type="button" class="nav-btn" data-view="telegram" aria-current="page">Telegram</button>
+      <button type="button" class="nav-btn" data-view="sources">Fonts
+        <span id="sources-badge" class="badge" hidden aria-label="fonts indexant-se">0</span>
+      </button>
+      <button type="button" class="nav-btn" data-view="settings">Configuració</button>
+    </nav>
+
+    <div id="conn-status" class="conn" data-state="connecting" role="status" aria-live="polite">
+      <span class="conn-dot" aria-hidden="true"></span>
+      <span class="conn-text">Connectant…</span>
+    </div>
+    <div class="session" id="session-box" hidden>
+      <button type="button" id="logout-btn" class="btn btn-small" hidden>Tanca la sessió</button>
+    </div>
+  </header>
+
+  <!-- ============ LOGIN / FIRST-RUN PASSWORD ============ -->
+  <section id="auth-screen" class="auth-screen" hidden aria-labelledby="auth-title">
+    <form id="auth-form" class="auth-card card" novalidate>
+      <h1 id="auth-title">Inicia la sessió</h1>
+      <p id="auth-text" class="muted">Escriu la contrasenya de Telegram Downloader.</p>
+      <label for="auth-password">Contrasenya</label>
+      <input id="auth-password" type="password" autocomplete="current-password" required maxlength="1024">
+      <div id="auth-confirm-row" hidden>
+        <label for="auth-confirm">Repeteix la contrasenya</label>
+        <input id="auth-confirm" type="password" autocomplete="new-password" maxlength="1024">
+      </div>
+      <label class="check"><input type="checkbox" id="auth-show"> <span>Mostra la contrasenya</span></label>
+      <p id="auth-error" class="form-error" role="alert" aria-live="assertive" hidden></p>
+      <button type="submit" id="auth-submit" class="btn btn-primary btn-lg">Entra</button>
+    </form>
+  </section>
+
+  <main id="main" tabindex="-1">
+    <div id="storage-banner" class="banner banner-error" role="alert" hidden></div>
+
+    <!-- ============ TELEGRAM ============ -->
+    <section id="view-telegram" class="view" aria-labelledby="telegram-title">
+      <div class="view-header">
+        <div>
+          <h1 id="telegram-title">Compte de Telegram</h1>
+          <p class="muted">El teu compte d'usuari (no un bot): l'aplicació hi veu els mateixos xats que tu.</p>
+        </div>
+      </div>
+      <div id="telegram-content" aria-live="polite"></div>
+      <div id="dialogs-content"></div>
+    </section>
+
+    <!-- ============ SOURCES ============ -->
+    <section id="view-sources" class="view" hidden aria-labelledby="sources-title">
+      <div class="view-header">
+        <div>
+          <h1 id="sources-title">Fonts</h1>
+          <p class="muted">Els xats i canals d'on es recuperen fitxers. Se'n desa l'índex (nom, mida, data, text) i es refresca sol.</p>
+        </div>
+      </div>
+      <div id="sources-content"></div>
+    </section>
+
+    <!-- ============ SETTINGS ============ -->
+    <section id="view-settings" class="view" hidden aria-labelledby="settings-title">
+      <div class="view-header">
+        <div>
+          <h1 id="settings-title">Configuració</h1>
+          <p class="muted">Els camps definits per variables d'entorn (Docker) no es poden canviar des d'aquí.</p>
+        </div>
+      </div>
+
+      <div id="settings-loading" class="loading" role="status">
+        <span class="spinner" aria-hidden="true"></span><span>Carregant la configuració…</span>
+      </div>
+
+      <form id="settings-form" class="settings" hidden novalidate>
+        <fieldset class="card">
+          <legend>API de Telegram</legend>
+          <div id="api-help"></div>
+          <div class="grid-2">
+            <div>
+              <label for="set-api-id">api_id</label>
+              <input id="set-api-id" type="text" inputmode="numeric" spellcheck="false" autocomplete="off">
+            </div>
+            <div>
+              <label for="set-api-hash">api_hash</label>
+              <input id="set-api-hash" type="password" spellcheck="false" autocomplete="off" maxlength="32">
+              <p id="api-hash-state" class="help"></p>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="card">
+          <legend>Carpetes</legend>
+          <label for="set-download-dir">Carpeta de baixades (d'on importen Sonarr i Radarr)</label>
+          <input id="set-download-dir" type="text" spellcheck="false" data-field="download_dir">
+          <label for="set-temp-dir">Carpeta temporal (fitxers a mitges i descompressió)</label>
+          <input id="set-temp-dir" type="text" spellcheck="false" data-field="temp_dir" placeholder="">
+          <p class="help">Buida = <code>.tmp</code> dins la carpeta de baixades: és al mateix disc, i moure els fitxers és instantani.</p>
+          <div class="grid-2">
+            <div>
+              <label for="set-library-tv">Biblioteca de sèries (col·locació directa)</label>
+              <input id="set-library-tv" type="text" spellcheck="false" data-field="library_tv_dir" placeholder="/data/Series">
+            </div>
+            <div>
+              <label for="set-library-movies">Biblioteca de pel·lícules (col·locació directa)</label>
+              <input id="set-library-movies" type="text" spellcheck="false" data-field="library_movies_dir" placeholder="/data/Pelicules">
+            </div>
+          </div>
+          <label for="set-sentinel">Fitxer sentinella del disc de xarxa</label>
+          <input id="set-sentinel" type="text" spellcheck="false" data-field="storage_sentinel" placeholder="/data/.tgdl-nas">
+          <p class="help">Si el NAS no està muntat, la carpeta és buida i és al disc local: s'ompliria. Crea aquest
+            fitxer un sol cop al NAS (a l'amfitrió: <code>touch /mnt/Plex/.tgdl-nas</code>) i l'aplicació no escriurà
+            res mentre no el vegi.</p>
+          <div id="storage-info" class="kv"></div>
+        </fieldset>
+
+        <fieldset class="card">
+          <legend>Índex i baixades</legend>
+          <div class="grid-2">
+            <div>
+              <label for="set-index-interval">Refresca l'índex cada (minuts, 0 = mai)</label>
+              <input id="set-index-interval" type="number" min="0" max="10080" data-field="index_interval_minutes" data-kind="int">
+            </div>
+            <div>
+              <label for="set-stall">Reconnecta si un fitxer no avança en (segons)</label>
+              <input id="set-stall" type="number" min="15" max="3600" data-field="stall_seconds" data-kind="int">
+            </div>
+            <div>
+              <label for="set-parallel-files">Fitxers alhora</label>
+              <input id="set-parallel-files" type="number" min="1" max="8" data-field="max_parallel_files" data-kind="int">
+            </div>
+            <div>
+              <label for="set-chunks">Connexions per fitxer</label>
+              <input id="set-chunks" type="number" min="1" max="16" data-field="chunks_per_file" data-kind="int">
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="card">
+          <legend>Clau de l'API (Sonarr, Radarr, scripts)</legend>
+          <div class="field-row">
+            <input id="set-api-key" type="text" readonly spellcheck="false" class="mono">
+            <button type="button" id="set-copy-key" class="btn">Copiar</button>
+          </div>
+        </fieldset>
+
+        <div class="settings-actions">
+          <span id="settings-dirty" class="muted" hidden>Hi ha canvis sense desar.</span>
+          <button type="button" id="settings-discard" class="btn" disabled>Desfés els canvis</button>
+          <button type="submit" id="settings-save" class="btn btn-primary" disabled>Desa la configuració</button>
+        </div>
+      </form>
+
+      <form id="password-form" class="settings" hidden novalidate>
+        <fieldset class="card">
+          <legend>Contrasenya d'accés</legend>
+          <p class="help">Es tancaran les sessions obertes als altres dispositius.</p>
+          <label for="pw-current">Contrasenya actual</label>
+          <input id="pw-current" type="password" autocomplete="current-password" maxlength="1024">
+          <div class="grid-2">
+            <div>
+              <label for="pw-new">Contrasenya nova</label>
+              <input id="pw-new" type="password" autocomplete="new-password" minlength="8" maxlength="1024">
+            </div>
+            <div>
+              <label for="pw-confirm">Repeteix la contrasenya nova</label>
+              <input id="pw-confirm" type="password" autocomplete="new-password" maxlength="1024">
+            </div>
+          </div>
+          <p id="pw-error" class="form-error" role="alert" hidden></p>
+          <div class="settings-actions">
+            <button type="submit" id="pw-save" class="btn btn-primary">Canvia la contrasenya</button>
+          </div>
+        </fieldset>
+      </form>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span id="footer-info" class="muted">Telegram Downloader</span>
+    <span class="muted">Per recuperar les teves pròpies còpies de seguretat.</span>
+  </footer>
+
+  <div id="toasts" class="toasts" aria-live="polite" aria-relevant="additions"></div>
+
+  <dialog id="confirm-dialog" class="dialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+    <form method="dialog">
+      <h2 id="confirm-title">Confirmació</h2>
+      <p id="confirm-message"></p>
+      <div class="dialog-actions">
+        <button type="submit" value="cancel" class="btn" id="confirm-cancel">Cancel·la</button>
+        <button type="submit" value="ok" class="btn btn-primary" id="confirm-ok">D'acord</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>
