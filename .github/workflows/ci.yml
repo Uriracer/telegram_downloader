@@ -90,13 +90,16 @@ jobs:
           curl -fsS http://127.0.0.1:8766/api/auth/status | tee status.json
           grep -q '"mode":"server"' status.json
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8766/api/settings)" = 401
-          docker exec tgdl 7zz i | head -n 3
+          docker exec tgdl 7zz i > 7zz.txt   # no pipe into head: SIGPIPE + pipefail would fail the step
+          head -n 3 7zz.txt
           test -z "$(ls -A "$RUNNER_TEMP/nas")"   # nothing written to the "unmounted" share
-          docker logs tgdl 2>&1 | grep -q "no està muntat"
+          docker logs tgdl > tgdl.log 2>&1
+          grep -q "no està muntat" tgdl.log
           test "$(docker inspect --format '{{.State.Health.Status}}' tgdl)" != unhealthy
           docker stop tgdl
-          docker logs tgdl 2>&1 | tail -n 20
-          docker logs tgdl 2>&1 | grep -q "Aturat."
+          docker logs tgdl > tgdl.log 2>&1
+          tail -n 20 tgdl.log
+          grep -q "Aturat." tgdl.log
           test "$(docker inspect --format '{{.State.ExitCode}}' tgdl)" = 0
           test -f "$RUNNER_TEMP/config/settings.json"
           test "$(stat -c %u "$RUNNER_TEMP/config/settings.json")" = "$(id -u)"

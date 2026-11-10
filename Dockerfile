@@ -12,22 +12,22 @@ ARG TARGETARCH
 ARG SEVENZIP_VERSION=2501
 ARG SEVENZIP_SHA256_AMD64=4ca3b7c6f2f67866b92622818b58233dc70367be2f36b498eb0bdeaaa44b53f4
 ARG SEVENZIP_SHA256_ARM64=39c5140f02ce4436599303c59a149f654cb1bbc47cdc105a942120d747ae040d
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 # hadolint ignore=DL3008
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl xz-utils \
-    && rm -rf /var/lib/apt/lists/*
-RUN set -eu; \
-    case "${TARGETARCH:-amd64}" in \
-      amd64) arch=x64;   sum="$SEVENZIP_SHA256_AMD64" ;; \
-      arm64) arch=arm64; sum="$SEVENZIP_SHA256_ARM64" ;; \
-      *) echo "Arquitectura no suportada: $TARGETARCH" >&2; exit 1 ;; \
-    esac; \
-    curl -fsSL -o /tmp/7z.tar.xz "https://www.7-zip.org/a/7z${SEVENZIP_VERSION}-linux-${arch}.tar.xz"; \
-    echo "$sum  /tmp/7z.tar.xz" | sha256sum -c -; \
-    mkdir /tmp/7z && tar -xJf /tmp/7z.tar.xz -C /tmp/7z; \
-    install -m 0755 /tmp/7z/7zzs /usr/local/bin/7zz; \
-    install -m 0644 /tmp/7z/License.txt /usr/local/share/7zip-License.txt; \
-    /usr/local/bin/7zz i | head -n 3
+    && rm -rf /var/lib/apt/lists/* \
+    && case "${TARGETARCH:-amd64}" in \
+         amd64) arch=x64;   sum="$SEVENZIP_SHA256_AMD64" ;; \
+         arm64) arch=arm64; sum="$SEVENZIP_SHA256_ARM64" ;; \
+         *) echo "Arquitectura no suportada: $TARGETARCH" >&2; exit 1 ;; \
+       esac \
+    && curl -fsSL -o /tmp/7z.tar.xz "https://www.7-zip.org/a/7z${SEVENZIP_VERSION}-linux-${arch}.tar.xz" \
+    && echo "$sum  /tmp/7z.tar.xz" | sha256sum -c - \
+    && mkdir /tmp/7z && tar -xJf /tmp/7z.tar.xz -C /tmp/7z \
+    && install -m 0755 /tmp/7z/7zzs /usr/local/bin/7zz \
+    && install -m 0644 /tmp/7z/License.txt /usr/local/share/7zip-License.txt \
+    && /usr/local/bin/7zz i > /dev/null
 
 # --------------------------------------------------------------------------- build
 FROM python:${PYTHON_VERSION}-slim AS build
