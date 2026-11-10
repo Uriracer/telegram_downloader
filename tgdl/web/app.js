@@ -254,6 +254,7 @@ const SOURCE_KINDS = { series: 'Sèries', movies: 'Pel·lícules', other: 'Altre
 const SOURCE_MODES = { arr: 'A través de Sonarr / Radarr', library: 'Directament a la biblioteca' };
 const LANGUAGES = { ca: 'Català', es: 'Castellà', en: 'Anglès', ja: 'Japonès', fr: 'Francès', it: 'Italià', de: 'Alemany', pt: 'Portuguès' };
 const MESSAGE_PAGE = 200;
+const NUMBERINGS = { seasons: 'Per temporades (1x05 = T1 E5)', absolute: 'Absoluta, com a l\'anime (13x501 = episodi 501)' };
 
 function pill(text, kind = '') {
   return h('span', { class: `pill ${kind}`.trim(), text });
@@ -613,6 +614,10 @@ function sourceOptionsForm(src) {
   h('div', {}, h('label', { for: 'opt-kind', text: 'Contingut' }), select('kind', SOURCE_KINDS, o.kind)),
   h('div', {}, h('label', { for: 'opt-mode', text: 'Destí' }), select('mode', SOURCE_MODES, o.mode)),
   h('div', {}, h('label', { for: 'opt-language', text: "Idioma de l'àudio" }), select('language', LANGUAGES, o.language)),
+  h('div', {}, h('label', { for: 'opt-numbering', text: 'Numeració dels noms' }), select('numbering', NUMBERINGS, o.numbering)),
+  h('div', {}, h('label', { for: 'opt-tvdb_id', text: 'Id de TheTVDB' }),
+    h('input', { id: 'opt-tvdb_id', 'data-opt': 'tvdb_id', type: 'text', inputmode: 'numeric', pattern: '[0-9]*', value: o.tvdb_id ? String(o.tvdb_id) : '', placeholder: 'p. ex. 72454 (Detectiu Conan)' }),
+    h('p', { class: 'help', text: "El número de l'adreça de la sèrie a thetvdb.com, o el que surt a la carpeta de Jellyfin «[tvdbid-…]». 0 = cap." })),
   h('div', {}, h('label', { class: 'check' }, auto, h('span', { text: "Refresca l'índex automàticament" }))));
   return h('details', { class: 'source-options' }, h('summary', { text: 'Opcions de la font' }), form);
 }
@@ -655,7 +660,7 @@ function renderSources() {
     if (!detail || Number(detail.dataset.id) !== src.id) {
       detail = h('div', { id: 'source-detail', class: 'stack', dataset: { id: String(src.id) } },
         h('div', {}, h('button', { type: 'button', class: 'btn btn-small back-btn', text: '← Totes les fonts', onclick: () => { state.openSource = null; renderSources(); } })),
-        h('div', { id: 'source-summary' }), messagesPanel());
+        h('div', { id: 'source-summary' }), reviewPanel(src), messagesPanel());
       setChildren(box, detail);
     }
     const open = $('#source-summary details')?.open;
@@ -671,6 +676,114 @@ function renderSources() {
     return;
   }
   setChildren(box, h('div', { class: 'stack' }, [...state.sources.values()].map((s) => sourceSummary(s))));
+}
+
+// ---------------------------------------------------------------------------
+// Check before downloading, tdl import, library
+// ---------------------------------------------------------------------------
+
+function tdlPathKey(id) { return `tgdl.tdlPath.${id}`; }
+
+function storedTdlPath(id) {
+  try { return localStorage.getItem(tdlPathKey(id)) || ''; } catch { return ''; }
+}
+
+function reviewPanel(src) {
+  const path = h('input', { type: 'text', id: 'tdl-path', value: storedTdlPath(src.id) || '/data/_conan/zips', 'aria-label': 'Carpeta on tdl ha deixat els fitxers', placeholder: '/data/_conan/zips' });
+  const run = (fn) => async (event) => {
+    const btn = event.currentTarget;
+    btn.disabled = true;
+    try { await fn(); } catch (e) { showError(e); } finally { btn.disabled = false; }
+  };
+  return h('section', { class: 'card', id: 'review-card' },
+    h('h2', { text: 'Revisió abans de baixar' }),
+    h('p', { class: 'muted', text: "Agrupa els volums de cada arxiu, els compara amb TheTVDB i amb la biblioteca, i diu què falta, què està repetit i què no s'entén. No baixa ni esborra res." }),
+    h('div', { class: 'review-actions' },
+      h('button', { type: 'button', class: 'btn btn-primary btn-small', text: 'Revisa', onclick: run(() => loadReview(src.id)) }),
+      h('button', { type: 'button', class: 'btn btn-small', text: 'Marca el que ja és a la biblioteca', title: 'Els fitxers dels episodis que ja tens a la carpeta de la sèrie no es baixaran mai', onclick: run(() => reconcileLibrary(src.id)) })),
+    h('div', { class: 'review-actions' },
+      path,
+      h('button', { type: 'button', class: 'btn btn-small', text: 'Importa el que ha baixat tdl', title: 'Fitxers «<canal>_<missatge>_<nom>» complets: no es tornaran a baixar', onclick: run(() => importTdl(src.id, path.value.trim())) })),
+    h('div', { id: 'review-result' }));
+}
+
+async function loadReview(id, { refresh = false } = {}) {
+  const box = $('#review-result');
+  setChildren(box, spinner('Revisant…'));
+  const data = await api(`sources/${id}/review${refresh ? '?refresh=true' : ''}`);
+  if (state.openSource === id) renderReview(data);
+}
+
+function reviewList(title, items, kind, render) {
+  if (!items.length) return null;
+  return h('details', { class: 'review-section' },
+    h('summary', {}, pill(String(items.length), kind), ' ', title),
+    h('ul', {}, items.map((it) => h('li', {}, render(it)))));
+}
+
+function renderReview(r) {
+  const s = r.summary;
+  const notes = [];
+  if (r.tvdb) notes.push(h('p', { class: 'muted', text: `TheTVDB: «${r.tvdb.title}», ${r.tvdb.episodes} episodis${r.tvdb.stale ? ' (còpia desada: TheTVDB no respon)' : ''}.` }));
+  else if (r.tvdb_error) notes.push(h('p', { class: 'pill pill-err', text: r.tvdb_error }));
+  else notes.push(h('p', { class: 'muted', text: "Sense l'id de TheTVDB només es poden veure els forats de la numeració. Posa'l a «Opcions de la font»." }));
+  const lib = r.library || {};
+  if (lib.folder) notes.push(h('p', { class: 'muted', text: `Biblioteca: ${lib.folder} (${plural(lib.episodes, 'episodi', 'episodis')}).` }));
+  else if (lib.problem) notes.push(h('p', { class: 'muted', text: `Biblioteca: ${lib.problem}` }));
+
+  const summary = h('div', { class: 'review-summary' },
+    pill(`${plural(s.episodes, 'episodi', 'episodis')} a Telegram`, 'pill-accent'),
+    pill(`${plural(s.releases, 'arxiu', 'arxius')} (${plural(s.files, 'fitxer', 'fitxers')})`),
+    s.in_library ? pill(`${s.in_library} ja a la biblioteca`, 'pill-ok') : null,
+    s.library_only ? pill(`${s.library_only} només a la biblioteca`, 'pill-info') : null,
+    s.missing ? pill(`${s.missing} falten`, 'pill-warn') : pill('No en falta cap', 'pill-ok'),
+    s.beyond ? pill(`${s.beyond} posteriors encara no penjats`, 'pill-info') : null,
+    s.duplicates ? pill(`${s.duplicates} repetits`, 'pill-warn') : null,
+    s.unrecognized ? pill(`${s.unrecognized} sense número`, 'pill-err') : null,
+    s.not_in_tvdb ? pill(`${s.not_in_tvdb} no són a TheTVDB`, 'pill-err') : null,
+    s.incomplete ? pill(`${s.incomplete} incomplets`, 'pill-err') : null);
+
+  setChildren($('#review-result'), ...notes, summary,
+    reviewList('Episodis que falten', r.missing, 'pill-warn', (m) => (m.count === 1 ? m.from : `${m.from} → ${m.to} (${m.count})`)),
+    reviewList('Repetits (es baixarà només el marcat)', r.duplicates, 'pill-warn', (d) => h('span', {},
+      h('strong', { text: d.label }), ': ',
+      ...d.names.map((n, i) => h('span', {}, i ? ' · ' : '', n === d.keep ? h('strong', { text: `✔ ${n}` }) : n)),
+      d.reuploaded.length ? h('span', { class: 'muted', text: ' (algun volum penjat dues vegades)' }) : null)),
+    reviewList("Sense número d'episodi", r.unrecognized, 'pill-err', (u) => `${u.name} (missatge ${u.msg_ids.join(', ')})`),
+    reviewList('No són a TheTVDB', r.not_in_tvdb, 'pill-err', (rel) => `${rel.name} → ${rel.label}`),
+    reviewList('Arxius incomplets (falten volums)', r.incomplete, 'pill-err', (rel) => `${rel.name}: hi ha els volums ${rel.volumes.join(', ')}`),
+    reviewList('Altres fitxers (ni vídeo ni arxiu)', r.other_files, '', (o) => o.name),
+    reviewList('Tots els arxius reconeguts', r.releases.filter((x) => x.label), 'pill-info', (rel) => h('span', {},
+      h('span', { class: 'mono', text: rel.label }), rel.tvdb_title ? ` — ${rel.tvdb_title}` : '', ' ', h('span', { class: 'muted', text: rel.name }),
+      rel.in_library ? h('span', {}, ' ', pill('a la biblioteca', 'pill-ok')) : null,
+      !rel.keep ? h('span', {}, ' ', pill('repetit', 'pill-warn')) : null)));
+}
+
+async function reconcileLibrary(id) {
+  const res = await api(`sources/${id}/reconcile`, { method: 'POST' });
+  if (res.source) state.sources.set(id, res.source);
+  toast(`${plural(res.episodes, 'episodi', 'episodis')} a la biblioteca; ${plural(res.marked, 'fitxer marcat', 'fitxers marcats')} perquè no es baixin.`, { kind: 'success' });
+  renderSources();
+  loadMessages();
+}
+
+async function importTdl(id, path) {
+  if (!path) { toast('Escriu la carpeta on tdl ha deixat els fitxers.', { kind: 'error' }); return; }
+  try { localStorage.setItem(tdlPathKey(id), path); } catch { /* private mode */ }
+  const dry = await api(`sources/${id}/import`, { method: 'POST', body: { path, dry_run: true } });
+  const lines = [`A ${dry.folder} hi ha ${plural(dry.found, 'fitxer', 'fitxers')} d'aquest canal.`,
+    `${dry.imported} es poden importar; ${dry.already} ja hi eren.`];
+  if (dry.size_mismatch.length) lines.push(`${dry.size_mismatch.length} tenen una mida diferent de la de Telegram (baixades a mitges): no s'importen i es tornaran a baixar.`);
+  if (dry.unknown.length) lines.push(`${dry.unknown.length} no són a l'índex (missatges esborrats o encara no indexats).`);
+  if (dry.other_chat) lines.push(`${dry.other_chat} són d'altres canals i no es toquen.`);
+  if (!dry.imported) { toast(lines.join(' '), { kind: 'info', title: 'Res per importar' }); return; }
+  const ok = await confirmDialog({ title: 'Importar els fitxers de tdl?', message: lines.join(' ') + " Els fitxers no es mouen: només es marca que ja estan baixats.", okText: 'Importa' });
+  if (!ok) return;
+  const res = await api(`sources/${id}/import`, { method: 'POST', body: { path } });
+  if (res.source) state.sources.set(id, res.source);
+  toast(`${plural(res.imported, 'fitxer importat', 'fitxers importats')}.`, { kind: 'success' });
+  renderSources();
+  loadMessages();
 }
 
 function messagesPanel() {
@@ -706,13 +819,14 @@ function renderMessages(data) {
     setChildren(table, h('p', { class: 'muted', text: data.total === 0 && !state.msgQuery.q && !state.msgQuery.state ? 'Encara no s\'ha trobat cap fitxer en aquesta font.' : 'Cap fitxer coincideix amb el filtre.' }));
   } else {
     setChildren(table, h('div', { class: 'table-wrap' }, h('table', { class: 'list' },
-      h('thead', {}, h('tr', {}, h('th', { class: 'num', text: 'Missatge' }), h('th', { text: 'Fitxer' }), h('th', { class: 'num', text: 'Mida' }),
+      h('thead', {}, h('tr', {}, h('th', { class: 'num', text: 'Missatge' }), h('th', { text: 'Fitxer' }), h('th', { text: 'Episodi' }), h('th', { class: 'num', text: 'Mida' }),
         h('th', { text: 'Data' }), h('th', { text: 'Estat' }))),
       h('tbody', {}, data.items.map((m) => {
         const [label, kind] = MESSAGE_STATES[m.state] || [m.state, ''];
         return h('tr', {},
           h('td', { class: 'num mono', text: String(m.msg_id) }),
           h('td', { class: 'name' }, m.file_name, m.text ? h('div', { class: 'msg-text', text: m.text.slice(0, 300) }) : null),
+          h('td', { class: 'mono nowrap' }, m.episode || h('span', { class: 'muted', text: '—' }), m.volume > 1 ? h('div', { class: 'msg-text', text: `volum ${m.volume}` }) : null),
           h('td', { class: 'num', text: formatBytes(m.size) }),
           h('td', { text: formatDate(m.date) }),
           h('td', {}, pill(label, kind), m.error ? h('div', { class: 'msg-text', text: m.error }) : null));

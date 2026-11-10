@@ -98,3 +98,11 @@ def test_kv(database: Database) -> None:
     assert database.get_value("x", 5) == 5
     database.set_value("x", {"a": [1, 2]})
     assert database.get_value("x") == {"a": [1, 2]}
+
+
+def test_tvdb_and_numbering_options() -> None:
+    o = SourceOptions.from_dict({"tvdb_id": " 72454 ", "numbering": "absolute"})
+    assert (o.tvdb_id, o.numbering) == (72454, "absolute")
+    o = SourceOptions.from_dict({"tvdb_id": "abc", "numbering": "x"})
+    assert (o.tvdb_id, o.numbering) == (0, "seasons")
+    assert SourceOptions.from_dict({"tvdb_id": True}).tvdb_id == 0

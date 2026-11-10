@@ -68,3 +68,13 @@ input[type="number"]:focus, input[type="tel"]:focus { border-color: var(--focus)
 .source-options summary { cursor: pointer; font-weight: 600; color: var(--accent-text); margin-top: .25rem; }
 .source-options .grid-2 { margin-top: .5rem; }
 .source-options label:not(.check) { display: block; }
+
+/* Check before downloading */
+.review-actions { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; margin: .5rem 0 .75rem; }
+.review-actions input[type="text"] { flex: 1 1 16rem; width: auto; margin: 0; }
+.review-summary { display: flex; gap: .4rem; flex-wrap: wrap; margin: .5rem 0; }
+.review-section { margin-top: .5rem; }
+.review-section > summary { cursor: pointer; font-weight: 600; padding: .3rem 0; }
+.review-section ul { margin: .25rem 0 .5rem 1.25rem; padding: 0; max-height: 22rem; overflow: auto; }
+.review-section li { margin: .1rem 0; overflow-wrap: anywhere; }
+.nowrap { white-space: nowrap; }

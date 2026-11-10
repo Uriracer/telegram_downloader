@@ -26,16 +26,18 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import __version__ as APP_VERSION
-from . import storage
+from . import review, storage
 from .auth import COOKIE_NAME, SESSION_SECONDS, AuthManager, password_problem
 from .config import Settings, validation_errors
-from .db import STATES, Database, SourceOptions
+from .db import DOWNLOADED, ERROR, IN_LIBRARY, NEW, QUEUED, STATES, Database, SourceOptions
 from .events import CLOSE, EventBroadcaster, sse
 from .guard import LocalGuardMiddleware
+from .naming import parse as parse_name
 from .runtime import LOCKABLE_FIELDS, RuntimeConfig
 from .telegram.gateway import (ChatUnavailable, FloodWait, LoginError, NotAuthorized, NotConfigured,
                                TelegramError)
 from .telegram.service import TelegramService
+from .tvdb import Show, TvdbClient, TvdbError
 
 log = logging.getLogger(__name__)
 
@@ -141,6 +143,11 @@ class IndexRequest(BaseModel):
     full: bool = False
 
 
+class ImportRequest(BaseModel):
+    path: str = Field(min_length=1, max_length=4096)
+    dry_run: bool = False
+
+
 def resolve_web_dir() -> Path:
     return Path(__file__).resolve().parent / "web"
 
@@ -155,7 +162,8 @@ _MISSING_UI_HTML = """<!doctype html><html lang="ca"><meta charset="utf-8">
 def create_app(settings_store: Optional[SettingsStore] = None, *, db: Database, telegram: TelegramService,
                events: EventBroadcaster, runtime: Optional[RuntimeConfig] = None,
                auth: Optional[AuthManager] = None, web_dir: Optional[Path] = None,
-               data_dir: Optional[Path] = None, manage_telegram: bool = False) -> FastAPI:
+               data_dir: Optional[Path] = None, manage_telegram: bool = False,
+               tvdb: Optional[TvdbClient] = None) -> FastAPI:
     """Build the app. With ``manage_telegram`` the lifespan starts/stops the Telegram service."""
     rt = runtime or RuntimeConfig()
     store = settings_store or SettingsStore()
@@ -164,6 +172,7 @@ def create_app(settings_store: Optional[SettingsStore] = None, *, db: Database, 
                            password_env=rt.password_env)
     authm: AuthManager = auth
     tg = telegram
+    tvdb_client = tvdb or TvdbClient(db)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -185,6 +194,7 @@ def create_app(settings_store: Optional[SettingsStore] = None, *, db: Database, 
     app.state.events = events
     app.state.auth = authm
     app.state.runtime = rt
+    app.state.tvdb = tvdb_client
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(_request: Any, exc: RequestValidationError) -> JSONResponse:
@@ -442,7 +452,145 @@ def create_app(settings_store: Optional[SettingsStore] = None, *, db: Database, 
             raise HTTPException(status_code=422, detail="Estat desconegut.")
         total, items = await call(db.messages, source_id, q=q.strip(), state=state, offset=offset, limit=limit,
                                   include_photos=photos)
+        src = db.source(source_id)
+        numbering = src.options.numbering if src else "seasons"
+        for item in items:
+            parsed = parse_name(item["file_name"] or "", numbering)
+            item["episode"] = review.episode_label(parsed.season, parsed.episode, parsed.absolute)
+            item["volume"] = parsed.volume if parsed.is_archive else None
         return {"total": total, "offset": offset, "items": items}
+
+    # ------------------------------------------------------------- check / import
+    def source_show(src: Any, refresh: bool = False) -> tuple[Optional[Show], Optional[str]]:
+        if not src.options.tvdb_id:
+            return None, None
+        try:
+            return tvdb_client.show(src.options.tvdb_id, refresh=refresh), None
+        except TvdbError as exc:
+            return None, str(exc)
+
+    def source_library(src: Any, show: Optional[Show]) -> tuple[dict[str, str], dict[str, Any]]:
+        settings = store.get()
+        info: dict[str, Any] = {"root": settings.library_tv_dir, "folder": None, "problem": None, "episodes": 0}
+        if src.options.kind != "series" or not src.options.tvdb_id:
+            return {}, info
+        if not settings.library_tv_dir:
+            info["problem"] = "No hi ha cap carpeta de la biblioteca de sèries a la configuració."
+            return {}, info
+        problem = storage.storage_problem(settings)
+        if problem:
+            info["problem"] = problem
+            return {}, info
+        folder = review.find_series_dir(settings.library_tv_dir, src.options.tvdb_id)
+        if folder is None:
+            info["problem"] = (f"No hi ha cap carpeta amb «[tvdbid-{src.options.tvdb_id}]» a "
+                               f"{settings.library_tv_dir}.")
+            return {}, info
+        found = review.scan_library(folder, show)
+        info.update(folder=str(folder), episodes=len(found))
+        return found, info
+
+    def run_review(source_id: int, refresh: bool) -> dict[str, Any]:
+        src = db.source(source_id)
+        if src is None:
+            raise HTTPException(status_code=404, detail="Aquesta font no existeix.")
+        show, tvdb_error = source_show(src, refresh)
+        library, library_info = source_library(src, show)
+        report = review.analyze(db.all_messages(source_id), numbering=src.options.numbering, show=show,
+                                library=library)
+        report["tvdb_error"] = tvdb_error
+        report["library"] = library_info
+        return report
+
+    @app.get("/api/sources/{source_id}/review")
+    async def source_review(source_id: int, refresh: bool = False) -> dict[str, Any]:
+        return await call(run_review, source_id, refresh)
+
+    def run_reconcile(source_id: int) -> dict[str, Any]:
+        src = db.source(source_id)
+        if src is None:
+            raise HTTPException(status_code=404, detail="Aquesta font no existeix.")
+        show, tvdb_error = source_show(src)
+        library, info = source_library(src, show)
+        if info["problem"] or tvdb_error or not src.options.tvdb_id:
+            raise HTTPException(status_code=409, detail=info["problem"] or tvdb_error
+                                or "Posa l'id de TheTVDB a les opcions de la font.")
+        releases, _others = review.build_releases(db.all_messages(source_id), src.options.numbering, show)
+        marked = 0
+        for rel in releases:
+            if rel.ref is not None and rel.ref.key in library:
+                marked += db.set_state(source_id, rel.msg_ids, IN_LIBRARY,
+                                       only_from=(NEW, QUEUED, ERROR, DOWNLOADED))
+        log.info("Biblioteca: %d episodis a %s; %d fitxers de «%s» marcats com a ja a la biblioteca",
+                 len(library), info["folder"], marked, src.title)
+        return {"folder": info["folder"], "episodes": len(library), "marked": marked,
+                "source": tg.source_payload(source_id)}
+
+    @app.post("/api/sources/{source_id}/reconcile")
+    async def source_reconcile(source_id: int) -> dict[str, Any]:
+        result = await call(run_reconcile, source_id)
+        if result.get("source"):
+            events.publish("source", result["source"])
+        return result
+
+    def run_import(source_id: int, body: ImportRequest) -> dict[str, Any]:
+        src = db.source(source_id)
+        if src is None:
+            raise HTTPException(status_code=404, detail="Aquesta font no existeix.")
+        settings = store.get()
+        folder = Path(body.path.strip())
+        if not folder.is_absolute():
+            raise HTTPException(status_code=422, detail="Cal un camí absolut (per exemple /data/_conan/zips).")
+        problem = storage.storage_problem(settings)
+        if problem:
+            raise HTTPException(status_code=409, detail=problem)
+        if settings.storage_sentinel and not storage.is_within(folder, Path(settings.storage_sentinel).parent):
+            raise HTTPException(status_code=422,
+                                detail=f"La carpeta ha de ser dins de {Path(settings.storage_sentinel).parent}.")
+        try:
+            files = review.scan_tdl_dir(folder)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        result: dict[str, Any] = {"folder": str(folder), "dry_run": body.dry_run, "found": 0, "imported": 0,
+                                  "already": 0, "other_chat": 0, "unknown": [], "size_mismatch": []}
+        for f in files:
+            if not review.tdl_chat_matches(f.chat, src.chat_id):
+                result["other_chat"] += 1
+                continue
+            result["found"] += 1
+            msg = db.message(source_id, f.msg_id)
+            if msg is None or msg["deleted"]:
+                result["unknown"].append({"msg_id": f.msg_id, "name": f.name})
+                continue
+            if msg["size"] != f.size:
+                result["size_mismatch"].append({"msg_id": f.msg_id, "name": f.name, "size": f.size,
+                                                "expected": msg["size"]})
+                continue
+            if msg["state"] not in (NEW, QUEUED, ERROR):
+                result["already"] += 1
+                continue
+            if body.dry_run or db.mark_downloaded(source_id, f.msg_id, f.path):
+                result["imported"] += 1
+        if not body.dry_run:
+            log.info("Importació de tdl (%s): %d fitxers de «%s» importats, %d ja hi eren, %d de mida diferent",
+                     folder, result["imported"], src.title, result["already"], len(result["size_mismatch"]))
+        result["source"] = tg.source_payload(source_id)
+        return result
+
+    @app.post("/api/sources/{source_id}/import")
+    async def source_import(source_id: int, body: ImportRequest) -> dict[str, Any]:
+        result = await call(run_import, source_id, body)
+        if not body.dry_run and result.get("source"):
+            events.publish("source", result["source"])
+        return result
+
+    @app.get("/api/tvdb/{tvdb_id}")
+    async def tvdb_show(tvdb_id: int) -> dict[str, Any]:
+        try:
+            show = await call(tvdb_client.show, tvdb_id)
+        except TvdbError as exc:
+            raise HTTPException(status_code=404 if "cap sèrie" in str(exc) else 502, detail=str(exc)) from exc
+        return {"id": show.tvdb_id, "title": show.title, "episodes": len(show.regular()), "stale": show.stale}
 
     # ----------------------------------------------------------------- events
     @app.get("/api/events")

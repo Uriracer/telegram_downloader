@@ -109,3 +109,23 @@ def harness(tmp_path: Path, configured: Settings) -> Iterator[Harness]:
     yield h
     h.service.stop()
     h.db.close()
+
+
+SKYHOOK_FIXTURE = Path(__file__).parent / "fixtures" / "skyhook-72454.json"
+
+
+def skyhook_transport(calls: list[str] | None = None, *, fail: bool = False) -> Any:
+    """httpx transport answering like SkyHook for Detective Conan (72454), from a trimmed real copy."""
+    import httpx
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if calls is not None:
+            calls.append(str(request.url))
+        if fail:
+            raise httpx.ConnectError("sense xarxa", request=request)
+        if request.url.path.endswith("/72454"):
+            return httpx.Response(200, content=SKYHOOK_FIXTURE.read_bytes(),
+                                  headers={"content-type": "application/json"})
+        return httpx.Response(404, json={"message": "not found"})
+
+    return httpx.MockTransport(handler)

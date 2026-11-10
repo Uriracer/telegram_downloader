@@ -127,6 +127,26 @@ trobar fitxers nous. **Reindexa sencer** torna a llegir tot el canal i marca els
 A **Opcions de la font** tria què conté (sèries, pel·lícules), on ha d'anar (a través de Sonarr i
 Radarr o directament a la biblioteca) i l'idioma de l'àudio (català, castellà…).
 
+## 6. Revisar una font abans de baixar
+
+A **Opcions de la font**:
+
+- **Numeració dels noms**: *absoluta* per a l'anime (el Detectiu Conan: `13x501` és l'episodi 501), *per
+  temporades* per a la resta (`1x05` és la temporada 1, episodi 5).
+- **Id de TheTVDB**: el número de la sèrie a thetvdb.com, el mateix de la carpeta de Jellyfin
+  (`Detectiu Conan (1996) [tvdbid-72454]` → `72454`).
+
+Al tauler **Revisió abans de baixar**:
+
+1. **Revisa**: llista els episodis que falten, els repetits (V2/V3, o el mateix fitxer penjat dues vegades:
+   es baixarà només el marcat amb ✔), els fitxers sense número, els que no són a TheTVDB i els arxius
+   multipart als quals falta algun volum. No canvia res.
+2. **Marca el que ja és a la biblioteca**: busca la carpeta `[tvdbid-…]` a `TGDL_LIBRARY_TV` i marca els
+   fitxers d'aquells episodis perquè no es baixin mai.
+3. **Importa el que ha baixat tdl**: escriu la carpeta tal com la veu el contenidor (`/mnt/Plex/_conan/zips`
+   és `/data/_conan/zips`). Primer et diu què farà; els fitxers no es mouen. Els que tenen una mida diferent
+   de la de Telegram es tornaran a baixar.
+
 ## Problemes habituals
 
 | Què veus | Per què | Què fer |
@@ -136,4 +156,6 @@ Radarr o directament a la biblioteca) i l'idioma de l'àudio (català, castellà
 | Telegram «demana esperar N s» | Massa intents (FLOOD_WAIT) | Espera; l'aplicació ho torna a provar sola |
 | «La sessió s'ha tancat des d'un altre dispositiu» | L'has tancat des de Telegram → Dispositius | Torna a escanejar el QR |
 | La interfície no carrega des d'un altre equip | Port no publicat o tallafoc | Comprova `ports: ["8766:8766"]` |
+| La revisió diu «No hi ha cap carpeta amb [tvdbid-…]» | La carpeta de la sèrie no porta l'id | Posa-li `[tvdbid-N]` al nom, com espera Jellyfin |
+| Molts fitxers «sense número» | Un format de nom nou | Envia'n uns quants exemples: s'afegirà |
 | «ja s'està executant amb aquesta carpeta de dades» | Dos contenidors amb el mateix `/config` | Atura'n un: compartirien la sessió de Telegram |

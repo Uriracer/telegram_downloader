@@ -43,6 +43,7 @@ KIND_DOCUMENT, KIND_VIDEO, KIND_PHOTO, KIND_AUDIO = "document", "video", "photo"
 #: Source content kinds and how their files reach the library.
 SOURCE_KINDS = ("series", "movies", "other")
 SOURCE_MODES = ("arr", "library")       # through Sonarr/Radarr, or placed directly
+NUMBERINGS = ("seasons", "absolute")    # see naming.py
 
 
 def utcnow() -> str:
@@ -99,6 +100,8 @@ class SourceOptions:
     language: str = "ca"            # ISO 639-1 of the audio: release tag CATALAN/SPANISH…, metadata language
     auto_index: bool = True
     ignore_photos: bool = True
+    tvdb_id: int = 0                # TheTVDB series id (0 = none): episode list, library folder [tvdbid-N]
+    numbering: str = "seasons"      # seasons (1x05 = S01E05) | absolute (anime: 13x501 = episode 501)
 
     @classmethod
     def from_dict(cls, data: Any) -> "SourceOptions":
@@ -114,6 +117,11 @@ class SourceOptions:
         for name in ("auto_index", "ignore_photos"):
             if isinstance(data.get(name), bool):
                 setattr(out, name, data[name])
+        tvdb = data.get("tvdb_id")
+        if isinstance(tvdb, (int, str)) and not isinstance(tvdb, bool) and str(tvdb).strip().isdigit():
+            out.tvdb_id = int(str(tvdb).strip())
+        if data.get("numbering") in NUMBERINGS:
+            out.numbering = data["numbering"]
         return out
 
     def to_dict(self) -> dict[str, Any]:
@@ -331,6 +339,22 @@ class Database:
                           f"grouped_id FROM messages WHERE {clause} ORDER BY msg_id LIMIT ? OFFSET ?",
                           params + [limit, offset])
         return total, [dict(r) for r in rows]
+
+    def all_messages(self, source_id: int) -> list[dict[str, Any]]:
+        """Every live message of a source (for the check), oldest first."""
+        rows = self.query("SELECT msg_id, file_name, size, kind, state, local_path, grouped_id FROM messages "
+                          "WHERE source_id=? AND deleted=0 ORDER BY msg_id", (source_id,))
+        return [dict(r) for r in rows]
+
+    def mark_downloaded(self, source_id: int, msg_id: int, local_path: str, *,
+                        only_from: Iterable[str] = (NEW, QUEUED, ERROR)) -> bool:
+        """A complete copy of this file is at ``local_path`` (e.g. downloaded by tdl)."""
+        allowed = list(only_from)
+        with self.transaction() as conn:
+            return conn.execute(
+                f"UPDATE messages SET state=?, bytes_done=size, local_path=?, error=NULL, updated_at=? "
+                f"WHERE source_id=? AND msg_id=? AND state IN ({','.join('?' * len(allowed))})",
+                [DOWNLOADED, local_path, utcnow(), source_id, msg_id] + allowed).rowcount > 0
 
     def message(self, source_id: int, msg_id: int) -> Optional[dict[str, Any]]:
         rows = self.query("SELECT * FROM messages WHERE source_id=? AND msg_id=?", (source_id, msg_id))

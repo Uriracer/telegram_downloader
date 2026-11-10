@@ -6,11 +6,12 @@ from typing import Iterator
 import pytest
 from fastapi.testclient import TestClient
 
-from conftest import API_HASH, CONAN_CHAT, Harness, conan_gateway, wait_for
+from conftest import API_HASH, CONAN_CHAT, Harness, conan_gateway, skyhook_transport, wait_for
 from tgdl.config import Settings
 from tgdl.events import EventBroadcaster
 from tgdl.runtime import RuntimeConfig
 from tgdl.server import SettingsStore, create_app
+from tgdl.tvdb import TvdbClient
 
 ORIGIN = {"Origin": "http://testserver"}
 
@@ -27,7 +28,8 @@ class Env:
         runtime = (RuntimeConfig(mode="server", auth_required=True, allowed_hosts=None) if server_mode
                    else RuntimeConfig(mode="local", allowed_hosts=frozenset({"testserver", "127.0.0.1"})))
         self.app = create_app(self.store, db=self.harness.db, telegram=self.harness.service, events=self.events,
-                              runtime=runtime, data_dir=tmp_path)
+                              runtime=runtime, data_dir=tmp_path,
+                              tvdb=TvdbClient(self.harness.db, transport=skyhook_transport()))
         self.harness.service.start()
         self.client = TestClient(self.app)
 
@@ -151,5 +153,62 @@ def test_server_mode_requires_login(tmp_path: Path) -> None:
         c.cookies.clear()
         assert c.get("/api/settings").status_code == 401
         assert c.get("/api/settings", headers={"X-Api-Key": key}).status_code == 200
+    finally:
+        e.close()
+
+
+def test_check_import_and_reconcile(tmp_path: Path) -> None:
+    nas = tmp_path / "Plex"
+    season = nas / "Series" / "Detectiu Conan (1996) [tvdbid-72454]" / "Season 29"
+    season.mkdir(parents=True)
+    (season / "Detectiu Conan - S29E12 - 1004.mkv").write_bytes(b"video")       # DC-1004 is already there
+    zips = nas / "_conan" / "zips"
+    zips.mkdir(parents=True)
+    (nas / ".tgdl-nas").write_text("")
+    (zips / "1111111111_9_DC-1004 (Nus) [5A052F3A].rar").write_bytes(b"12345")   # tdl copy, complete
+    (zips / "1111111111_7_DC-928 (El vermell de l'amor) [70BF1E30].part1.rar").write_bytes(b"12")  # truncated
+    (zips / "2222222222_3_Altre.rar").write_bytes(b"1")                          # another channel
+    e = Env(tmp_path, overrides={"library_tv_dir": str(nas / "Series"), "storage_sentinel": str(nas / ".tgdl-nas"),
+                                 "download_dir": str(nas / "Descarregues" / "telegram")})
+    try:
+        login_telegram(e)
+        c = e.client
+        src = c.post("/api/sources", json={"chat_id": CONAN_CHAT}, headers=ORIGIN).json()
+        sid = src["id"]
+        wait_for(lambda: c.get(f"/api/sources/{sid}").json()["indexed_at"])
+        e.harness.db.execute("UPDATE messages SET size=5 WHERE msg_id=9")
+
+        page = c.get(f"/api/sources/{sid}/messages").json()["items"]
+        assert {i["file_name"][:6]: i["episode"] for i in page}["DC-928"] == "928"
+
+        # Without the TVDB id: gaps only, no library.
+        report = c.get(f"/api/sources/{sid}/review").json()
+        assert report["tvdb"] is None and report["library"]["folder"] is None
+        assert c.post(f"/api/sources/{sid}/reconcile", headers=ORIGIN).status_code == 409
+
+        c.patch(f"/api/sources/{sid}", json={"options": {"tvdb_id": "72454", "numbering": "absolute"}},
+                headers=ORIGIN)
+        report = c.get(f"/api/sources/{sid}/review").json()
+        assert report["tvdb"]["title"] == "Detective Conan" and report["library"]["episodes"] == 1
+        assert report["summary"]["unrecognized"] == 0 and report["summary"]["in_library"] == 1
+        rel = next(r for r in report["releases"] if r["absolute"] == 424)
+        assert rel["label"] == "S14E35 · 0424"
+
+        bad = c.post(f"/api/sources/{sid}/import", json={"path": str(tmp_path)}, headers=ORIGIN)
+        assert bad.status_code == 422                                     # outside the NAS
+        dry = c.post(f"/api/sources/{sid}/import", json={"path": str(zips), "dry_run": True}, headers=ORIGIN).json()
+        assert dry["imported"] == 1 and dry["other_chat"] == 1 and len(dry["size_mismatch"]) == 1
+        assert e.harness.db.message(sid, 9)["state"] == "new"
+        done = c.post(f"/api/sources/{sid}/import", json={"path": str(zips)}, headers=ORIGIN).json()
+        assert done["imported"] == 1
+        imported = e.harness.db.message(sid, 9)
+        assert imported["state"] == "downloaded" and imported["local_path"].endswith("[5A052F3A].rar")
+        again = c.post(f"/api/sources/{sid}/import", json={"path": str(zips)}, headers=ORIGIN).json()
+        assert again["imported"] == 0 and again["already"] == 1
+
+        result = c.post(f"/api/sources/{sid}/reconcile", headers=ORIGIN).json()
+        assert result["marked"] == 1 and e.harness.db.message(sid, 9)["state"] == "in_library"
+        assert c.get("/api/tvdb/72454").json()["title"] == "Detective Conan"
+        assert c.get("/api/tvdb/1").status_code == 404
     finally:
         e.close()

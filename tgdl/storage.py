@@ -53,7 +53,7 @@ def storage_problem(settings: Any) -> Optional[str]:
     if sentinel and download_dir:
         # The sentinel says the share is there; the download folder must be on it.
         root = Path(sentinel).parent
-        if not _is_within(Path(download_dir), root):
+        if not is_within(Path(download_dir), root):
             return (f"La carpeta de baixades «{download_dir}» no és dins del disc on hi ha el sentinella "
                     f"(«{root}»).")
     return None
@@ -99,7 +99,7 @@ def filesystem_type(path: str) -> Optional[str]:
             for line in fh:
                 left, _, right = line.partition(" - ")
                 mount_point = left.split()[4].replace("\\040", " ")
-                if _is_within(Path(target), Path(mount_point)) and len(mount_point) > len(best):
+                if is_within(Path(target), Path(mount_point)) and len(mount_point) > len(best):
                     best, best_type = mount_point, right.split()[0]
         return best_type
     except (OSError, IndexError):
@@ -122,7 +122,7 @@ def wait_for_storage(settings_getter: Any, stop: threading.Event, *, interval: f
     return False
 
 
-def _is_within(path: Path, root: Path) -> bool:
+def is_within(path: Path, root: Path) -> bool:
     try:
         Path(os.path.normcase(os.path.abspath(path))).relative_to(os.path.normcase(os.path.abspath(root)))
         return True
