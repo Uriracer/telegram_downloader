@@ -135,15 +135,19 @@ A **Opcions de la font**:
   temporades* per a la resta (`1x05` és la temporada 1, episodi 5).
 - **Id de TheTVDB**: el número de la sèrie a thetvdb.com, el mateix de la carpeta de Jellyfin
   (`Detectiu Conan (1996) [tvdbid-72454]` → `72454`).
+- **Carpeta de la sèrie a la biblioteca**: la que llegeix Jellyfin. Buida = la que porta `[tvdbid-…]` dins de
+  `TGDL_LIBRARY_TV`; si la teva no el porta, tria-la amb **Tria…** (el navegador només mostra carpetes
+  del NAS). Els episodis que hi ha (`S17E11`, `501. Títol.mkv`, `Season 17/11 - Títol.mkv`) es marquen
+  sols com a «A la biblioteca» després de cada indexació, encara que el zip ja s'hagi esborrat.
 
 Al tauler **Revisió abans de baixar**:
 
 1. **Revisa**: llista els episodis que falten, els repetits (V2/V3, o el mateix fitxer penjat dues vegades:
    es baixarà només el marcat amb ✔), els fitxers sense número, els que no són a TheTVDB i els arxius
    multipart als quals falta algun volum. No canvia res.
-2. **Marca el que ja és a la biblioteca**: busca la carpeta `[tvdbid-…]` a `TGDL_LIBRARY_TV` i marca els
-   fitxers d'aquells episodis perquè no es baixin mai.
-3. **Importa el que ha baixat tdl**: escriu la carpeta tal com la veu el contenidor (`/mnt/Plex/_conan/zips`
+2. **Torna a mirar la biblioteca**: el mateix que es fa sol després d'indexar (útil si acabes de posar-hi
+   episodis).
+3. **Importa el que ha baixat tdl**: tria la carpeta amb **Tria…** o escriu-la tal com la veu el contenidor (`/mnt/Plex/_conan/zips`
    és `/data/_conan/zips`). Primer et diu què farà; els fitxers no es mouen. Els que tenen una mida diferent
    de la de Telegram es tornaran a baixar.
 

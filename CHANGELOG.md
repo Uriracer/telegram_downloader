@@ -15,8 +15,12 @@ Format basat en [Keep a Changelog](https://keepachangelog.com/ca/1.1.0/); versio
 - **Revisió** de cada font: agrupa els volums dels arxius multipart, i diu quins episodis falten, quins
   estan repetits (es queda la versió més alta), quins no tenen número, quins no són a TheTVDB i quins
   arxius estan incomplets. No baixa ni esborra res.
-- **Biblioteca**: troba la carpeta de la sèrie per `[tvdbid-N]` i marca com a «A la biblioteca» els fitxers
-  dels episodis que ja hi són: no es baixaran mai.
+- **Biblioteca** (la carpeta que llegeix Jellyfin): la troba per `[tvdbid-N]` o la tries tu, i marca com a
+  «A la biblioteca» els fitxers dels episodis que ja hi són, encara que el zip s'hagi esborrat: no es
+  baixaran mai. Entén `S17E11`, `501. Títol.mkv` i `Season 17/11 - Títol.mkv`. Es comprova sola després de
+  cada indexació i quan canvien les opcions de la font.
+- **Navegador de carpetes** (només dins del NAS) per triar la carpeta de la sèrie, la de `tdl` i les de la
+  configuració.
 - **Importació del que ha baixat `tdl`** (`<canal>_<missatge>_<nom>`): si la mida coincideix amb la de
   Telegram, el fitxer queda com a baixat; si no (baixada a mitges), es tornarà a baixar. No es mou res.
 

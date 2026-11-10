@@ -118,3 +118,21 @@ def test_tdl_scan(tmp_path: Path) -> None:
     assert tdl_chat_matches(1495790952, -1001495790952) and not tdl_chat_matches(1495790952, -1001111111111)
     with pytest.raises(FileNotFoundError):
         scan_tdl_dir(tmp_path / "missing")
+
+
+def test_library_names_without_sxxeyy(tmp_path: Path, show: Any) -> None:
+    s17 = tmp_path / "Conan" / "Season 17"
+    s17.mkdir(parents=True)
+    for name in ("501. El xoc entre el vermell i el negre.mkv",   # absolute, with the title
+                 "12 - Episodi.mkv",                              # episode of the season folder
+                 "Detectiu Conan 0503.mp4"):                      # absolute, Japanese numbering
+        (s17 / name).write_bytes(b"x")
+    (tmp_path / "Conan" / "Extres").mkdir()
+    (tmp_path / "Conan" / "Extres" / "Opening.mkv").write_bytes(b"x")
+    found = scan_library(tmp_path / "Conan", show, "absolute")
+    assert set(found) == {"S17E11", "S17E12", "S17E13"}
+    # A normal series: "Temporada 2/05 - Títol.mkv" is S02E05.
+    t2 = tmp_path / "Hawaii" / "Temporada 2"
+    t2.mkdir(parents=True)
+    (t2 / "05 - Títol.mkv").write_bytes(b"x")
+    assert set(scan_library(tmp_path / "Hawaii", None, "seasons")) == {"S2E5"}

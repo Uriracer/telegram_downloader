@@ -159,9 +159,9 @@ def test_server_mode_requires_login(tmp_path: Path) -> None:
 
 def test_check_import_and_reconcile(tmp_path: Path) -> None:
     nas = tmp_path / "Plex"
-    season = nas / "Series" / "Detectiu Conan (1996) [tvdbid-72454]" / "Season 29"
+    season = nas / "Series" / "Detectiu Conan (1996) [tvdbid-72454]" / "Season 17"
     season.mkdir(parents=True)
-    (season / "Detectiu Conan - S29E12 - 1004.mkv").write_bytes(b"video")       # DC-1004 is already there
+    (season / "501. El xoc entre el vermell i el negre.mkv").write_bytes(b"video")   # 13x501 is already there
     zips = nas / "_conan" / "zips"
     zips.mkdir(parents=True)
     (nas / ".tgdl-nas").write_text("")
@@ -188,6 +188,7 @@ def test_check_import_and_reconcile(tmp_path: Path) -> None:
 
         c.patch(f"/api/sources/{sid}", json={"options": {"tvdb_id": "72454", "numbering": "absolute"}},
                 headers=ORIGIN)
+        assert e.harness.db.message(sid, 4)["state"] == "in_library"      # reconciled on its own
         report = c.get(f"/api/sources/{sid}/review").json()
         assert report["tvdb"]["title"] == "Detective Conan" and report["library"]["episodes"] == 1
         assert report["summary"]["unrecognized"] == 0 and report["summary"]["in_library"] == 1
@@ -207,7 +208,19 @@ def test_check_import_and_reconcile(tmp_path: Path) -> None:
         assert again["imported"] == 0 and again["already"] == 1
 
         result = c.post(f"/api/sources/{sid}/reconcile", headers=ORIGIN).json()
-        assert result["marked"] == 1 and e.harness.db.message(sid, 9)["state"] == "in_library"
+        assert result["marked"] == 0 and result["episodes"] == 1
+
+        # A folder without the [tvdbid] tag, chosen by hand with the browser.
+        other = nas / "Series" / "Conan en català" / "Temporada 29"
+        other.mkdir(parents=True)
+        (other / "12 - Nus.mkv").write_bytes(b"v")                             # S29E12 = 1004
+        listing = c.get("/api/fs", params={"path": str(nas / "Series")}).json()
+        assert [d["name"] for d in listing["dirs"]] == ["Conan en català", "Detectiu Conan (1996) [tvdbid-72454]"]
+        assert c.get("/api/fs", params={"path": str(tmp_path)}).json()["path"] == str(nas)   # cannot leave the NAS
+        assert c.get("/api/fs", params={"path": str(other)}).json()["videos"] == 1
+        c.patch(f"/api/sources/{sid}", json={"options": {"library_folder": str(nas / "Series" / "Conan en català")}},
+                headers=ORIGIN)
+        assert e.harness.db.message(sid, 9)["state"] == "in_library"      # the tdl copy is not needed any more
         assert c.get("/api/tvdb/72454").json()["title"] == "Detective Conan"
         assert c.get("/api/tvdb/1").status_code == 404
     finally:

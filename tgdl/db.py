@@ -102,6 +102,7 @@ class SourceOptions:
     ignore_photos: bool = True
     tvdb_id: int = 0                # TheTVDB series id (0 = none): episode list, library folder [tvdbid-N]
     numbering: str = "seasons"      # seasons (1x05 = S01E05) | absolute (anime: 13x501 = episode 501)
+    library_folder: str = ""        # folder of the series in the library ("" = the one tagged [tvdbid-N])
 
     @classmethod
     def from_dict(cls, data: Any) -> "SourceOptions":
@@ -122,6 +123,9 @@ class SourceOptions:
             out.tvdb_id = int(str(tvdb).strip())
         if data.get("numbering") in NUMBERINGS:
             out.numbering = data["numbering"]
+        folder = data.get("library_folder")
+        if isinstance(folder, str) and len(folder) <= 4096 and "\0" not in folder:
+            out.library_folder = folder.strip()
         return out
 
     def to_dict(self) -> dict[str, Any]:

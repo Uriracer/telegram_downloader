@@ -262,14 +262,46 @@ def find_series_dir(library_root: str | Path, tvdb_id: int) -> Optional[Path]:
     return None
 
 
-def scan_library(series_dir: str | Path, show: Optional[Show]) -> dict[str, str]:
+_SEASON_DIR = re.compile(r"^(?:Season|Temporada|Saison|Staffel|Stagione|Temp\.?|S)[ ._-]*(\d{1,3})$", re.I)
+
+
+def library_ref(name: str, season_dir: Optional[int], numbering: str, show: Optional[Show]) -> Optional[EpisodeRef]:
+    """The episode of a video already in the library.
+
+    ``S17E11`` wins; otherwise, in a ``Season 17`` folder, a lone number is the
+    episode of that season (``11 - Títol.mkv``) or, with absolute numbering,
+    the absolute number (``501. Títol.mkv``, ``Detectiu Conan 501.mkv``).
+    """
+    parsed = parse(name, "seasons")
+    if parsed.season is not None and parsed.episode is not None:
+        return resolve(parsed, show)
+    if numbering == ABSOLUTE:
+        absolute = parse(name, ABSOLUTE)
+        if absolute.absolute is not None:
+            ref = resolve(absolute, show)
+            # "11.mkv" inside "Season 17" is S17E11, not the absolute episode 11.
+            if (season_dir is not None and show is not None and ref is not None and ref.season != season_dir
+                    and show.by_season(season_dir, absolute.absolute) is not None):
+                return resolve(ParsedName(stem=parsed.stem, ext=parsed.ext, season=season_dir,
+                                          episode=absolute.absolute), show)
+            return ref
+    if season_dir is not None and parsed.episode is not None:
+        return resolve(ParsedName(stem=parsed.stem, ext=parsed.ext, season=season_dir, episode=parsed.episode),
+                       show)
+    return None
+
+
+def scan_library(series_dir: str | Path, show: Optional[Show], numbering: str = "seasons") -> dict[str, str]:
     """Episode key -> path of every video in the series folder (season folders included)."""
     found: dict[str, str] = {}
-    for dirpath, _dirs, files in os.walk(series_dir):
+    for dirpath, dirs, files in os.walk(series_dir):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        m = _SEASON_DIR.match(os.path.basename(dirpath))
+        season_dir = int(m[1]) if m else None
         for name in files:
             if name.startswith(".") or name.rsplit(".", 1)[-1].lower() not in VIDEO_EXTS:
                 continue
-            ref = resolve(parse(name, "seasons"), show)
+            ref = library_ref(name, season_dir, numbering, show)
             if ref is not None:
                 found.setdefault(ref.key, os.path.join(dirpath, name))
     return found

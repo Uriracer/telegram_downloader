@@ -599,6 +599,7 @@ function sourceOptionsForm(src) {
   const select = (name, labels, value) => h('select', { id: `opt-${name}`, 'data-opt': name },
     ...Object.entries(labels).map(([k, label]) => h('option', { value: k, text: label, selected: value === k })));
   const auto = h('input', { type: 'checkbox', id: 'opt-auto', checked: o.auto_index !== false });
+  const folderInput = h('input', { id: 'opt-library_folder', 'data-opt': 'library_folder', type: 'text', spellcheck: 'false', value: o.library_folder || '', placeholder: 'automàtica ([tvdbid-…])' });
   const form = h('form', {
     class: 'grid-2', novalidate: true,
     onchange: async () => {
@@ -608,6 +609,8 @@ function sourceOptionsForm(src) {
         const updated = await api(`sources/${src.id}`, { method: 'PATCH', body: { options } });
         state.sources.set(updated.id, updated);
         toast("S'han desat les opcions de la font.", { kind: 'success', timeout: 2500 });
+        renderSources();
+        loadMessages();
       } catch (e) { showError(e); }
     },
   },
@@ -618,6 +621,9 @@ function sourceOptionsForm(src) {
   h('div', {}, h('label', { for: 'opt-tvdb_id', text: 'Id de TheTVDB' }),
     h('input', { id: 'opt-tvdb_id', 'data-opt': 'tvdb_id', type: 'text', inputmode: 'numeric', pattern: '[0-9]*', value: o.tvdb_id ? String(o.tvdb_id) : '', placeholder: 'p. ex. 72454 (Detectiu Conan)' }),
     h('p', { class: 'help', text: "El número de l'adreça de la sèrie a thetvdb.com, o el que surt a la carpeta de Jellyfin «[tvdbid-…]». 0 = cap." })),
+  h('div', {}, h('label', { for: 'opt-library_folder', text: 'Carpeta de la sèrie a la biblioteca' }),
+    h('div', { class: 'path-field' }, folderInput, browseButton(folderInput, 'Carpeta de la sèrie a Jellyfin')),
+    h('p', { class: 'help', text: "La que llegeix Jellyfin. Buida = la que porta «[tvdbid-…]» dins la biblioteca de sèries. Els episodis que hi ha no es baixaran mai." })),
   h('div', {}, h('label', { class: 'check' }, auto, h('span', { text: "Refresca l'índex automàticament" }))));
   return h('details', { class: 'source-options' }, h('summary', { text: 'Opcions de la font' }), form);
 }
@@ -700,9 +706,9 @@ function reviewPanel(src) {
     h('p', { class: 'muted', text: "Agrupa els volums de cada arxiu, els compara amb TheTVDB i amb la biblioteca, i diu què falta, què està repetit i què no s'entén. No baixa ni esborra res." }),
     h('div', { class: 'review-actions' },
       h('button', { type: 'button', class: 'btn btn-primary btn-small', text: 'Revisa', onclick: run(() => loadReview(src.id)) }),
-      h('button', { type: 'button', class: 'btn btn-small', text: 'Marca el que ja és a la biblioteca', title: 'Els fitxers dels episodis que ja tens a la carpeta de la sèrie no es baixaran mai', onclick: run(() => reconcileLibrary(src.id)) })),
+      h('button', { type: 'button', class: 'btn btn-small', text: 'Torna a mirar la biblioteca', title: 'Els fitxers dels episodis que ja tens a la carpeta de la sèrie no es baixaran mai', onclick: run(() => reconcileLibrary(src.id)) })),
     h('div', { class: 'review-actions' },
-      path,
+      path, browseButton(path, 'Carpeta on tdl ha deixat els fitxers'),
       h('button', { type: 'button', class: 'btn btn-small', text: 'Importa el que ha baixat tdl', title: 'Fitxers «<canal>_<missatge>_<nom>» complets: no es tornaran a baixar', onclick: run(() => importTdl(src.id, path.value.trim())) })),
     h('div', { id: 'review-result' }));
 }
@@ -728,7 +734,7 @@ function renderReview(r) {
   else if (r.tvdb_error) notes.push(h('p', { class: 'pill pill-err', text: r.tvdb_error }));
   else notes.push(h('p', { class: 'muted', text: "Sense l'id de TheTVDB només es poden veure els forats de la numeració. Posa'l a «Opcions de la font»." }));
   const lib = r.library || {};
-  if (lib.folder) notes.push(h('p', { class: 'muted', text: `Biblioteca: ${lib.folder} (${plural(lib.episodes, 'episodi', 'episodis')}).` }));
+  if (lib.folder) notes.push(h('p', { class: 'muted', text: `Biblioteca (el que veu Jellyfin): ${lib.folder}, ${plural(lib.episodes, 'episodi', 'episodis')}. Es comprova sola després de cada indexació.` }));
   else if (lib.problem) notes.push(h('p', { class: 'muted', text: `Biblioteca: ${lib.problem}` }));
 
   const summary = h('div', { class: 'review-summary' },
@@ -940,6 +946,99 @@ function connectEvents() {
 }
 
 // ---------------------------------------------------------------------------
+// Folder browser
+// ---------------------------------------------------------------------------
+
+/**
+ * Let the user pick a folder on the NAS. Resolves with the path, or null if cancelled.
+ * @param {{ title?: string, start?: string }} opts
+ * @returns {Promise<string | null>}
+ */
+function pickFolder({ title = 'Tria una carpeta', start = '' } = {}) {
+  const pathInput = h('input', { type: 'text', spellcheck: 'false', 'aria-label': 'Camí de la carpeta', class: 'picker-path' });
+  const filter = h('input', { type: 'search', placeholder: 'Filtra les carpetes', 'aria-label': 'Filtra les carpetes' });
+  const list = h('ul', { class: 'picker-list' });
+  const info = h('p', { class: 'muted picker-info' });
+  const upBtn = h('button', { type: 'button', class: 'btn btn-small', text: '↑ Amunt' });
+  const okBtn = h('button', { type: 'button', class: 'btn btn-primary', text: 'Tria aquesta carpeta' });
+  const cancelBtn = h('button', { type: 'button', class: 'btn', text: 'Cancel·la' });
+  const dialog = h('dialog', { class: 'dialog dialog-wide', 'aria-label': title },
+    h('h2', { text: title }),
+    h('div', { class: 'picker-bar' }, upBtn, pathInput,
+      h('button', { type: 'button', class: 'btn btn-small', text: 'Ves-hi', onclick: () => go(pathInput.value.trim()) })),
+    filter, list, info,
+    h('div', { class: 'dialog-actions' }, cancelBtn, okBtn));
+  document.body.append(dialog);
+
+  let current = null;
+  const fill = () => {
+    const q = normalise(filter.value);
+    const dirs = (current?.dirs || []).filter((d) => !q || normalise(d.name).includes(q));
+    setChildren(list, dirs.length ? dirs.map((d) => h('li', {},
+      h('button', { type: 'button', class: 'picker-dir', text: `📁 ${d.name}`, onclick: () => go(d.path) })))
+      : h('li', { class: 'muted', text: current?.dirs?.length ? 'Cap carpeta coincideix amb el filtre.' : 'No hi ha subcarpetes.' }));
+  };
+  const go = async (path) => {
+    setChildren(list, h('li', {}, spinner('Carregant…')));
+    try {
+      current = await api(`fs?${new URLSearchParams({ path })}`);
+    } catch (e) {
+      showError(e);
+      if (!current) { setChildren(list); return; }
+    }
+    pathInput.value = current.path;
+    filter.value = '';
+    upBtn.disabled = !current.parent;
+    const bits = [plural(current.dirs.length, 'carpeta', 'carpetes')];
+    if (current.videos) bits.push(plural(current.videos, 'vídeo', 'vídeos'));
+    if (current.archives) bits.push(plural(current.archives, 'arxiu comprimit', 'arxius comprimits'));
+    if (current.tdl) bits.push(`${current.tdl} de tdl`);
+    if (current.truncated) bits.push('(llista retallada)');
+    info.textContent = bits.join(' · ') + (current.root ? ` — només es pot navegar dins de ${current.root}` : '');
+    fill();
+  };
+  upBtn.addEventListener('click', () => current?.parent && go(current.parent));
+  filter.addEventListener('input', fill);
+  pathInput.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); go(pathInput.value.trim()); } });
+
+  return new Promise((resolve) => {
+    let result = null;
+    okBtn.addEventListener('click', () => { result = current?.path || null; dialog.close(); });
+    cancelBtn.addEventListener('click', () => dialog.close());
+    dialog.addEventListener('close', () => { dialog.remove(); resolve(result); }, { once: true });
+    dialog.showModal();
+    go(start);
+  });
+}
+
+/** A "Tria…" button that fills ``input`` with the chosen folder and fires its events. */
+function browseButton(input, title) {
+  return h('button', {
+    type: 'button', class: 'btn btn-small', text: 'Tria…', title: 'Navega per les carpetes',
+    onclick: async () => {
+      if (input.disabled) return;
+      const path = await pickFolder({ title, start: input.value.trim() || (input.placeholder.startsWith('/') ? input.placeholder : '') });
+      if (path == null) return;
+      input.value = path;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    },
+  });
+}
+
+/** Put a "Tria…" button after each path field of the settings form. */
+function addSettingsBrowsers() {
+  const titles = { download_dir: 'Carpeta de baixades', temp_dir: 'Carpeta temporal', library_tv_dir: 'Biblioteca de sèries', library_movies_dir: 'Biblioteca de pel·lícules' };
+  for (const [field, title] of Object.entries(titles)) {
+    const input = $(`#settings-form [data-field="${field}"]`);
+    if (!input || input.parentElement.classList.contains('path-field')) continue;
+    const wrap = h('div', { class: 'path-field' });
+    input.replaceWith(wrap);
+    wrap.append(input, browseButton(input, title));
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Settings
 // ---------------------------------------------------------------------------
 
@@ -1009,6 +1108,7 @@ async function saveSettings(event) {
 }
 
 function wireStaticUi() {
+  addSettingsBrowsers();
   for (const btn of document.querySelectorAll('.nav-btn')) btn.addEventListener('click', () => showView(btn.dataset.view));
   $('#settings-form').addEventListener('input', () => markDirty(true));
   $('#settings-form').addEventListener('submit', saveSettings);

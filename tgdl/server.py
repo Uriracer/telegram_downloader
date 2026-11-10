@@ -26,7 +26,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import __version__ as APP_VERSION
-from . import review, storage
+from . import files, review, storage
 from .auth import COOKIE_NAME, SESSION_SECONDS, AuthManager, password_problem
 from .config import Settings, validation_errors
 from .db import DOWNLOADED, ERROR, IN_LIBRARY, NEW, QUEUED, STATES, Database, SourceOptions
@@ -423,8 +423,11 @@ def create_app(settings_store: Optional[SettingsStore] = None, *, db: Database, 
         await call(require_source, source_id)
         src = db.source(source_id)
         assert src is not None
-        merged = {**src.options.to_dict(), **body.options}
-        await call(db.set_source_options, source_id, SourceOptions.from_dict(merged))
+        merged = SourceOptions.from_dict({**src.options.to_dict(), **body.options})
+        await call(db.set_source_options, source_id, merged)
+        if (merged.tvdb_id, merged.numbering, merged.library_folder, merged.kind) != (
+                src.options.tvdb_id, src.options.numbering, src.options.library_folder, src.options.kind):
+            await call(auto_reconcile, source_id)
         return tg.source_payload(source_id) or {}
 
     @app.delete("/api/sources/{source_id}")
@@ -472,21 +475,28 @@ def create_app(settings_store: Optional[SettingsStore] = None, *, db: Database, 
     def source_library(src: Any, show: Optional[Show]) -> tuple[dict[str, str], dict[str, Any]]:
         settings = store.get()
         info: dict[str, Any] = {"root": settings.library_tv_dir, "folder": None, "problem": None, "episodes": 0}
-        if src.options.kind != "series" or not src.options.tvdb_id:
+        if src.options.kind != "series" or not (src.options.tvdb_id or src.options.library_folder):
             return {}, info
-        if not settings.library_tv_dir:
+        if not settings.library_tv_dir and not src.options.library_folder:
             info["problem"] = "No hi ha cap carpeta de la biblioteca de sèries a la configuració."
             return {}, info
         problem = storage.storage_problem(settings)
         if problem:
             info["problem"] = problem
             return {}, info
-        folder = review.find_series_dir(settings.library_tv_dir, src.options.tvdb_id)
-        if folder is None:
-            info["problem"] = (f"No hi ha cap carpeta amb «[tvdbid-{src.options.tvdb_id}]» a "
-                               f"{settings.library_tv_dir}.")
-            return {}, info
-        found = review.scan_library(folder, show)
+        if src.options.library_folder:
+            folder: Optional[Path] = Path(src.options.library_folder)
+            info["chosen"] = True
+            if not folder.is_dir():
+                info["problem"] = f"No existeix la carpeta de la sèrie {folder}."
+                return {}, info
+        else:
+            folder = review.find_series_dir(settings.library_tv_dir, src.options.tvdb_id)
+            if folder is None:
+                info["problem"] = (f"No hi ha cap carpeta amb «[tvdbid-{src.options.tvdb_id}]» a "
+                                   f"{settings.library_tv_dir}: tria-la a «Opcions de la font».")
+                return {}, info
+        found = review.scan_library(folder, show, src.options.numbering)
         info.update(folder=str(folder), episodes=len(found))
         return found, info
 
@@ -512,9 +522,9 @@ def create_app(settings_store: Optional[SettingsStore] = None, *, db: Database, 
             raise HTTPException(status_code=404, detail="Aquesta font no existeix.")
         show, tvdb_error = source_show(src)
         library, info = source_library(src, show)
-        if info["problem"] or tvdb_error or not src.options.tvdb_id:
+        if info["problem"] or tvdb_error or not info["folder"]:
             raise HTTPException(status_code=409, detail=info["problem"] or tvdb_error
-                                or "Posa l'id de TheTVDB a les opcions de la font.")
+                                or "Posa l'id de TheTVDB o tria la carpeta de la sèrie a «Opcions de la font».")
         releases, _others = review.build_releases(db.all_messages(source_id), src.options.numbering, show)
         marked = 0
         for rel in releases:
@@ -525,6 +535,17 @@ def create_app(settings_store: Optional[SettingsStore] = None, *, db: Database, 
                  len(library), info["folder"], marked, src.title)
         return {"folder": info["folder"], "episodes": len(library), "marked": marked,
                 "source": tg.source_payload(source_id)}
+
+    def auto_reconcile(source_id: int) -> None:
+        """After indexing or changing the options: quietly mark what the library already has."""
+        try:
+            result = run_reconcile(source_id)
+        except HTTPException:
+            return
+        if result.get("source"):
+            events.publish("source", result["source"])
+
+    tg.after_index = auto_reconcile
 
     @app.post("/api/sources/{source_id}/reconcile")
     async def source_reconcile(source_id: int) -> dict[str, Any]:
@@ -583,6 +604,13 @@ def create_app(settings_store: Optional[SettingsStore] = None, *, db: Database, 
         if not body.dry_run and result.get("source"):
             events.publish("source", result["source"])
         return result
+
+    @app.get("/api/fs")
+    async def browse_folders(path: str = Query("", max_length=4096)) -> dict[str, Any]:
+        try:
+            return await call(files.browse, path, store.get())
+        except files.BrowseError as exc:
+            raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
 
     @app.get("/api/tvdb/{tvdb_id}")
     async def tvdb_show(tvdb_id: int) -> dict[str, Any]:

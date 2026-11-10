@@ -82,6 +82,8 @@ class TelegramService:
         self._indexing: dict[int, dict[str, Any]] = {}
         self._boot_task: Optional[asyncio.Task] = None
         self._last_me_refresh = 0.0
+        #: Called (in a worker thread) with the source id after each index run, e.g. to reconcile the library.
+        self.after_index: Optional[Callable[[int], None]] = None
 
     # =================================================================== thread / loop
     def start(self) -> None:
@@ -445,6 +447,12 @@ class TelegramService:
             log.warning("Índex «%s»: %s", src.title, error)
         else:
             log.info("Índex «%s»: %d fitxers revisats, %d de nous", src.title, seen, new)
+        hook = self.after_index
+        if hook is not None:
+            try:
+                await asyncio.to_thread(hook, source_id)
+            except Exception:
+                log.exception("Error després d'indexar «%s»", src.title)
 
     def _index_due(self) -> None:
         """Start indexing every auto-indexed source whose last index is older than the interval."""
