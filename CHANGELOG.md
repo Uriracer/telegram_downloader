@@ -4,7 +4,18 @@ Format basat en [Keep a Changelog](https://keepachangelog.com/ca/1.1.0/); versio
 
 ## [0.1.0] — en desenvolupament
 
-### Fase 5: Sonarr (Radarr encara no)
+### Fase 5: Radarr (pel·lícules)
+- **Pel·lícules**: «DC-Movie 22», «DC Movie 24», «Animelliure_DC_Movie_01_v2…» es reconeixen (número de
+  pel·lícula) i els volums `_part1.rar` (amb guió baix) s'agrupen bé: abans cada volum semblava un arxiu.
+- **Col·lecció de TMDB** a les opcions de la font (`tmdb_collection`, 39199 per al Detectiu Conan): la
+  pel·lícula N és l'N-èsima de la col·lecció per data d'estrena. Ve del servei de metadades de Radarr i es
+  desa a la base de dades (inclou els títols traduïts, el català també).
+- **Radarr**: l'indexador ofereix una pel·lícula per número amb el títol i l'any de TMDB
+  (`Case.Closed.Zero.the.Enforcer.2018.CATALAN.720p.WEB-DL-TGDL`) i els ids de TMDB i IMDb; cerca per
+  `tmdbid`, `imdbid` o títol, i novetats per a les categories 2000. Mai les que ja són a la biblioteca.
+- Provat amb el Radarr real: les 28 pel·lícules del canal s'interpreten bé (títol, any, WEBDL-720p, català).
+
+### Fase 5: Sonarr
 - **Indexador Newznab** (`/arr/newznab/api`): Sonarr hi busca per l'id de TheTVDB de les fonts (o pel títol)
   i rep un llançament per episodi (la millor còpia, tots els volums) amb la mida real i un nom que entén:
   `Detective.Conan.S26E01.Títol.CATALAN.720p.WEB-DL-TGDL`.

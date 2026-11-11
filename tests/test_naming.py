@@ -76,3 +76,22 @@ def test_tdl_prefix() -> None:
     assert split_tdl_name("1495790952_1006_DC-901 (I) [5DC7CC1E].rar") == (1495790952, 1006,
                                                                             "DC-901 (I) [5DC7CC1E].rar")
     assert split_tdl_name("13x501_El_xoc.rar") is None
+
+
+@pytest.mark.parametrize("name, movie, volume, version", [
+    ("Animelliure_DC_Movie_01_v2_Multi_Audio_1080p_81FB8097_part1.rar", 1, 1, 2),
+    ("Animelliure_DC_Movie_01_v2_Multi_Audio_1080p_81FB8097_part5.rar", 1, 5, 2),
+    ("Animelliure_DC_Movie_11_Multi_Audio_1080p_AFE93815_part5.rar", 11, 5, 1),
+    ("[Animelliure] DC Movie 24 [Multi-Audio] [1080p].part3.rar", 24, 3, 1),
+    ("DC-Movie 22 [C7FE7101].part4.rar", 22, 4, 1),
+    ("DC-Movie 28 [1080p] [E0CE99F7].part2.rar", 28, 2, 1),
+])
+def test_films_and_their_volumes(name: str, movie: int, volume: int, version: int) -> None:
+    p = parse(name, "seasons")
+    assert (p.movie, p.volume, p.version, p.absolute, p.episode) == (movie, volume, version, None, None)
+    assert p.is_archive
+
+
+def test_volumes_of_one_film_share_the_archive_key() -> None:
+    names = [f"Animelliure_DC_Movie_01_v2_Multi_Audio_1080p_81FB8097_part{i}.rar" for i in range(1, 6)]
+    assert len({parse(n).archive_key for n in names}) == 1

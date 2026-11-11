@@ -1,0 +1,773 @@
+{
+ "TmdbId": 39199,
+ "Name": "Detective Conan Collection",
+ "Parts": [
+  {
+   "TmdbId": 20677,
+   "ImdbId": "tt1068773",
+   "Title": "Detective Conan: Captured in Her Eyes",
+   "OriginalTitle": "名探偵コナン 瞳の中の暗殺者",
+   "Year": 2000,
+   "InCinema": "2000-04-22T00:00:00Z",
+   "Runtime": 100,
+   "Translations": [
+    {
+     "Language": "en-US",
+     "Title": "Detective Conan: Captured in Her Eyes"
+    },
+    {
+     "Language": "es-ES",
+     "Title": "Detective Conan 4: Capturado en sus ojos"
+    },
+    {
+     "Language": "ca-ES",
+     "Title": "El detectiu Conan: Atrapat als seus ulls"
+    },
+    {
+     "Language": "es-MX",
+     "Title": "Detective Conan 4: Capturado en sus ojos"
+    }
+   ]
+  },
+  {
+   "TmdbId": 21422,
+   "ImdbId": "tt0131479",
+   "Title": "Detective Conan: The Time Bombed Skyscraper",
+   "OriginalTitle": "名探偵コナン 時計じかけの摩天楼",
+   "Year": 1997,
+   "InCinema": "1997-04-19T00:00:00Z",
+   "Runtime": 94,
+   "Translations": [
+    {
+     "Language": "en-US",
+     "Title": "Detective Conan: The Time Bombed Skyscraper"
+    },
+    {
+     "Language": "es-ES",
+     "Title": "Detective Conan: Peligro en el rascacielos"
+    },
+    {
+     "Language": "ca-ES",
+     "Title": "El detectiu Conan: El gratacel explosiu"
+    },
+    {
+     "Language": "es-MX",
+     "Title": "Detective Conan 1: Peligro en el rascacielos"
+    }
+   ]
+  },
+  {
+   "TmdbId": 21452,
+   "ImdbId": "tt0965649",
+   "Title": "Case Closed: The Fourteenth Target",
+   "OriginalTitle": "名探偵コナン 14番目の標的",
+   "Year": 1998,
+   "InCinema": "1998-04-18T00:00:00Z",
+   "Runtime": 100,
+   "Translations": [
+    {
+     "Language": "en-US",
+     "Title": "Case Closed: The Fourteenth Target"
+    },
+    {
+     "Language": "es-ES",
+     "Title": "Detective Conan 2: La decimocuarta víctima"
+    },
+    {
+     "Language": "ca-ES",
+     "Title": "El detectiu Conan:  La catorzena víctima"
+    },
+    {
+     "Language": "es-MX",
+     "Title": "Detective Conan 2: La decimocuarta víctima"
+    }
+   ]
+  },
+  {
+   "TmdbId": 26662,
+   "ImdbId": "tt0990372",
+   "Title": "Detective Conan: The Phantom of Baker Street",
+   "OriginalTitle": "名探偵コナン ベイカー街（ストリート）の亡霊",
+   "Year": 2002,
+   "InCinema": "2002-04-20T00:00:00Z",
+   "Runtime": 107,
+   "Translations": [
+    {
+     "Language": "en-US",
+     "Title": "Detective Conan: The Phantom of Baker Street"
+    },
+    {
+     "Language": "es-ES",
+     "Title": "Detective Conan 6: El fantasma de la calle Baker"
+    },
+    {
+     "Language": "ca-ES",
+     "Title": "El detectiu Conan: El fantasma de Baker Street"
+    },
+    {
+     "Language": "es-MX",
+     "Title": "Detective Conan 6: El fantasma de Baker Street"
+    }
+   ]
+  },
+  {
+   "TmdbId": 28764,
+   "ImdbId": "tt1343046",
+   "Title": "Detective Conan: The Raven Chaser",
+   "OriginalTitle": "名探偵コナン 漆黒の追跡者（チェイサー）",
+   "Year": 2009,
+   "InCinema": "2009-04-18T00:00:00Z",
+   "Runtime": 111,
+   "Translations": [
+    {
+     "Language": "en-US",
+     "Title": "Detective Conan: The Raven Chaser"
+    },
+    {
+     "Language": "es-ES",
+     "Title": "Detective Conan 13: El perseguidor negro"
+    },
+    {
+     "Language": "ca-ES",
+     "Title": "El detectiu Conan: El perseguidor negre"
+    },
+    {
+     "Language": "es-MX",
+     "Title": "Detective Conan 13: El perseguidor negro"
+    }
+   ]
+  },
+  {
+   "TmdbId": 28808,
+   "ImdbId": "tt1067920",
+   "Title": "Detective Conan: The Last Wizard of the Century",
+   "OriginalTitle": "名探偵コナン 世紀末の魔術師",
+   "Year": 1999,
+   "InCinema": "1999-04-17T00:00:00Z",
+   "Runtime": 100,
+   "Translations": [
+    {
+     "Language": "en-US",
+     "Title": "Detective Conan: The Last Wizard of the Century"
+    },
+    {
+     "Language": "es-ES",
+     "Title": "Detective Conan 3: El último mago del siglo"
+    },
+    {
+     "Language": "ca-ES",
+     "Title": "El detectiu Conan: L'últim mag del segle"
+    },
+    {
+     "Language": "es-MX",
+     "Title": "Detective Conan 3: El último mago del siglo"
+    }
+   ]
+  },
+  {
+   "TmdbId": 32022,
+   "ImdbId": "tt1073223",
+   "Title": "Case Closed: Countdown to Heaven",
+   "OriginalTitle": "名探偵コナン 天国へのカウントダウン",
+   "Year": 2001,
+   "InCinema": "2001-04-21T00:00:00Z",
+   "Runtime": 100,
+   "Translations": [
+    {
+     "Language": "en-US",
+     "Title": "Case Closed: Countdown to Heaven"
+    },
+    {
+     "Language": "es-ES",
+     "Title": "Detective Conan 5: Cuenta regresiva al cielo"
+    },
+    {
+     "Language": "ca-ES",
+     "Title": "El detectiu Conan: Compte enrere cap al cel"
+    },
+    {
+     "Language": "es-MX",
+     "Title": "Detective Conan 5: Cuenta regresiva al cielo"
+    }
+   ]
+  },
+  {
+   "TmdbId": 39202,
+   "ImdbId": "tt1133935",
+   "Title": "Detective Conan: Crossroad in the Ancient Capital",
+   "OriginalTitle": "名探偵コナン 迷宮の十字路",
+   "Year": 2003,
+   "InCinema": "2003-04-19T00:00:00Z",
+   "Runtime": 110,
+   "Translations": [
+    {
+     "Language": "en-US",
+     "Title": "Detective Conan: Crossroad in the Ancient Capital"
+    },
+    {
+     "Language": "es-ES",
+     "Title": "Detective Conan 7: Cruce en la antigua capital"
+    },
+    {
+     "Language": "ca-ES",
+     "Title": "El detectiu Conan: Cruïlla a l'antiga capital"
+    },
+    {
+     "Language": "es-MX",
+     "Title": "Detective Conan 7: Cruce en la antigua capital"
+    }
+   ]
+  },
+  {
+   "TmdbId": 39203,
+   "ImdbId": "tt1133559",
+   "Title": "Detective Conan: Magician of the Silver Sky",
+   "OriginalTitle": "名探偵コナン 銀翼の奇術師",
+   "Year": 2004,
+   "InCinema": "2004-04-17T00:00:00Z",
+   "Runtime": 110,
+   "Translations": [
+    {
+     "Language": "en-US",
+     "Title": "Detective Conan: Magician of the Silver Sky"
+    },
+    {
+     "Language": "es-ES",
+     "Title": "Detective Conan 8: El mago del cielo plateado"
+    },
+    {
+     "Language": "ca-ES",
+     "Title": "El detectiu Conan: El mag del cel platejat"
+    },
+    {
+     "Language": "es-MX",
+     "Title": "Detective Conan 8: El mago del cielo plateado"
+    }
+   ]
+  },
+  {
+   "TmdbId": 39204,
+   "ImdbId": "tt1133936",
+   "Title": "Detective Conan: Strategy Above the Depths",
+   "OriginalTitle": "名探偵コナン 水平線上の陰謀",
+   "Year": 2005,
+   "InCinema": "2005-04-09T00:00:00Z",
+   "Runtime": 110,
+   "Translations": [
+    {
+     "Language": "en-US",
+     "Title": "Detective Conan: Strategy Above the Depths"
+    },
+    {
+     "Language": "es-ES",
+     "Title": "Detective Conan 9: Estrategia sobre las profundidades"
+    },
+    {
+     "Language": "ca-ES",
+     "Title": "El detectiu Conan: Estratègia sobre les profunditats"
+    },
+    {
+     "Language": "es-MX",
+     "Title": "Detective Conan 9: Estrategia en las profundidades"
+    }
+   ]
+  },
+  {
+   "TmdbId": 39205,
+   "ImdbId": "tt0498536",
+   "Title": "Detective Conan: The Private Eyes' Requiem",
+   "OriginalTitle": "名探偵コナン 探偵たちの鎮魂歌（レクイエム）",
+   "Year": 2006,
+   "InCinema": "2006-04-15T00:00:00Z",
+   "Runtime": 110,
+   "Translations": [
+    {
+     "Language": "en-US",
+     "Title": "Detective Conan: The Private Eyes' Requiem"
+    },
+    {
+     "Language": "es-ES",
+     "Title": "Detective Conan 10: El réquiem de los detectives"
+    },
+    {
+     "Language": "ca-ES",
+     "Title": "El detectiu Conan: El rèquiem dels detectius"
+    },
+    {
+     "Language": "es-MX",
+     "Title": "Detective Conan 10: El réquiem de los detectives"
+    }
+   ]
+  },
+  {
+   "TmdbId": 39206,
+   "ImdbId": "tt1146290",
+   "Title": "Detective Conan: Jolly Roger in the Deep Azure",
+   "OriginalTitle": "名探偵コナン 紺碧の棺 （ジョリー・ロジャー）",
+   "Year": 2007,
+   "InCinema": "2007-04-21T00:00:00Z",
+   "Runtime": 110,
+   "Translations": [
+    {
+     "Language": "en-US",
+     "Title": "Detective Conan: Jolly Roger in the Deep Azure"
+    },
+    {
+     "Language": "es-ES",
+     "Title": "Detective Conan 11: La bandera pirata en el vasto océano"
+    },
+    {
+     "Language": "ca-ES",
+     "Title": "El detectiu Conan: La bandera pirata al fons de l'oceà"
+    },
+    {
+     "Language": "es-MX",
+     "Title": "Detective Conan 11: La bandera pirata en el vasto océano"
+    }
+   ]
+  },
+  {
+   "TmdbId": 39207,
+   "ImdbId": "tt1155696",
+   "Title": "Detective Conan: Full Score of Fear",
+   "OriginalTitle": "名探偵コナン 戦慄の楽譜（フルスコア）",
+   "Year": 2008,
+   "InCinema": "2008-04-19T00:00:00Z",
+   "Runtime": 115,
+   "Translations": [
+    {
+     "Language": "en-US",
+     "Title": "Detective Conan: Full Score of Fear"
+    },
+    {
+     "Language": "es-ES",
+     "Title": "Detective Conan 12: La partitura del miedo"
+    },
+    {
+     "Language": "ca-ES",
+     "Title": "El detectiu Conan: La partitura de la por"
+    },
+    {
+     "Language": "es-MX",
+     "Title": "Detective Conan 12: La partitura del miedo"
+    }
+   ]
+  },
+  {
+   "TmdbId": 77617,
+   "ImdbId": "tt1840372",
+   "Title": "Detective Conan: Quarter of Silence",
+   "OriginalTitle": "名探偵コナン 沈黙の15分（クォーター）",
+   "Year": 2011,
+   "InCinema": "2011-04-16T00:00:00Z",
+   "Runtime": 109,
+   "Translations": [
+    {
+     "Language": "en-US",
+     "Title": "Detective Conan: Quarter of Silence"
+    },
+    {
+     "Language": "es-ES",
+     "Title": "Detective Conan 15: 15 minutos de silencio"
+    },
+    {
+     "Language": "ca-ES",
+     "Title": "El detectiu Conan: Quinze minuts de silenci"
+    },
+    {
+     "Language": "es-MX",
+     "Title": "Detective Conan 15: 15 minutos de silencio"
+    }
+   ]
+  },
+  {
+   "TmdbId": 97375,
+   "ImdbId": "tt1636815",
+   "Title": "Detective Conan: The Lost Ship in the Sky",
+   "OriginalTitle": "名探偵コナン 天空の難破船（ロスト・シップ）",
+   "Year": 2010,
+   "InCinema": "2010-04-17T00:00:00Z",
+   "Runtime": 103,
+   "Translations": [
+    {
+     "Language": "en-US",
+     "Title": "Detective Conan: The Lost Ship in the Sky"
+    },
+    {
+     "Language": "es-ES",
+     "Title": "Detective Conan 14: El barco perdido en el cielo"
+    },
+    {
+     "Language": "ca-ES",
+     "Title": "El detectiu Conan: La nau perduda al cel"
+    },
+    {
+     "Language": "es-MX",
+     "Title": "Detective Conan 14: El barco perdido en el cielo"
+    }
+   ]
+  },
+  {
+   "TmdbId": 122583,
+   "ImdbId": "tt2131586",
+   "Title": "Detective Conan: The Eleventh Striker",
+   "OriginalTitle": "名探偵コナン １１人目のストライカー",
+   "Year": 2012,
+   "InCinema": "2012-04-14T00:00:00Z",
+   "Runtime": 110,
+   "Translations": [
+    {
+     "Language": "en-US",
+     "Title": "Detective Conan: The Eleventh Striker"
+    },
+    {
+     "Language": "es-ES",
+     "Title": "Detective Conan 16: El undécimo delantero"
+    },
+    {
+     "Language": "ca-ES",
+     "Title": "El detectiu Conan: L'onzè davanter"
+    },
+    {
+     "Language": "es-MX",
+     "Title": "Detective Conan 16: El undécimo delantero"
+    }
+   ]
+  },
+  {
+   "TmdbId": 228805,
+   "ImdbId": "tt3303446",
+   "Title": "Detective Conan: Private Eye in the Distant Sea",
+   "OriginalTitle": "名探偵コナン・絶海の探偵",
+   "Year": 2013,
+   "InCinema": "2013-04-20T00:00:00Z",
+   "Runtime": 110,
+   "Translations": [
+    {
+     "Language": "en-US",
+     "Title": "Detective Conan: Private Eye in the Distant Sea"
+    },
+    {
+     "Language": "es-ES",
+     "Title": "Detective Conan 17: El detective del mar distante"
+    },
+    {
+     "Language": "ca-ES",
+     "Title": "El detectiu Conan: El detectiu al mar distant"
+    },
+    {
+     "Language": "es-MX",
+     "Title": "Detective Conan 17: El Detective en el Mar Lejano"
+    }
+   ]
+  },
+  {
+   "TmdbId": 257512,
+   "ImdbId": "tt3455204",
+   "Title": "Detective Conan: Dimensional Sniper",
+   "OriginalTitle": "名探偵コナン 異次元の狙撃手",
+   "Year": 2014,
+   "InCinema": "2014-04-19T00:00:00Z",
+   "Runtime": 110,
+   "Translations": [
+    {
+     "Language": "en-US",
+     "Title": "Detective Conan: Dimensional Sniper"
+    },
+    {
+     "Language": "es-ES",
+     "Title": "Detective Conan 18: El francotirador de otra dimensión"
+    },
+    {
+     "Language": "ca-ES",
+     "Title": "El detectiu Conan: El franctirador dimensional"
+    },
+    {
+     "Language": "es-MX",
+     "Title": "Detective Conan: El caso del francotirador dimensional"
+    }
+   ]
+  },
+  {
+   "TmdbId": 316873,
+   "ImdbId": "tt3737650",
+   "Title": "Detective Conan: Sunflowers of Inferno",
+   "OriginalTitle": "名探偵コナン 業火の向日葵",
+   "Year": 2015,
+   "InCinema": "2015-04-18T00:00:00Z",
+   "Runtime": 113,
+   "Translations": [
+    {
+     "Language": "en-US",
+     "Title": "Detective Conan: Sunflowers of Inferno"
+    },
+    {
+     "Language": "es-ES",
+     "Title": "Detective Conan 19: Los girasoles del fuego infernal"
+    },
+    {
+     "Language": "ca-ES",
+     "Title": "El detectiu Conan: Els gira-sols del foc infernal"
+    },
+    {
+     "Language": "es-MX",
+     "Title": "Detective Conan: Los girasoles del infierno"
+    }
+   ]
+  },
+  {
+   "TmdbId": 374856,
+   "ImdbId": "tt4954660",
+   "Title": "Detective Conan: The Darkest Nightmare",
+   "OriginalTitle": "名探偵コナン 純黒の悪夢（ナイトメア）",
+   "Year": 2016,
+   "InCinema": "2016-04-16T00:00:00Z",
+   "Runtime": 112,
+   "Translations": [
+    {
+     "Language": "en-US",
+     "Title": "Detective Conan: The Darkest Nightmare"
+    },
+    {
+     "Language": "ca-ES",
+     "Title": "El detectiu Conan: El malson més negre"
+    },
+    {
+     "Language": "es-ES",
+     "Title": "Detective Conan 20: La pesadilla negra"
+    },
+    {
+     "Language": "es-MX",
+     "Title": "Detective Conan 20: La Negra Pesadilla"
+    }
+   ]
+  },
+  {
+   "TmdbId": 438058,
+   "ImdbId": "tt5692622",
+   "Title": "Case Closed: The Crimson Love Letter",
+   "OriginalTitle": "名探偵コナン から紅の恋歌",
+   "Year": 2017,
+   "InCinema": "2017-04-15T00:00:00Z",
+   "Runtime": 112,
+   "Translations": [
+    {
+     "Language": "en-US",
+     "Title": "Case Closed: The Crimson Love Letter"
+    },
+    {
+     "Language": "es-ES",
+     "Title": "Detective Conan 21: La carta de amor carmesí"
+    },
+    {
+     "Language": "es-MX",
+     "Title": "Detective Conan 21: Una Carta de Amor de Rojo Carmesí"
+    },
+    {
+     "Language": "ca-ES",
+     "Title": "El detectiu Conan: La carta d'amor escarlata"
+    }
+   ]
+  },
+  {
+   "TmdbId": 493006,
+   "ImdbId": "tt7880466",
+   "Title": "Case Closed: Zero the Enforcer",
+   "OriginalTitle": "名探偵コナン ゼロの執行人",
+   "Year": 2018,
+   "InCinema": "2018-04-13T00:00:00Z",
+   "Runtime": 110,
+   "Translations": [
+    {
+     "Language": "en-US",
+     "Title": "Case Closed: Zero the Enforcer"
+    },
+    {
+     "Language": "es-ES",
+     "Title": "Detective Conan 22: El caso Zero"
+    },
+    {
+     "Language": "ca-ES",
+     "Title": "El detectiu Conan: El cas Zero"
+    },
+    {
+     "Language": "es-MX",
+     "Title": "Detective Conan: El caso cero"
+    }
+   ]
+  },
+  {
+   "TmdbId": 566555,
+   "ImdbId": "tt9501310",
+   "Title": "Case Closed: The Fist of Blue Sapphire",
+   "OriginalTitle": "名探偵コナン 紺青の拳（フィスト）",
+   "Year": 2019,
+   "InCinema": "2019-04-12T00:00:00Z",
+   "Runtime": 109,
+   "Translations": [
+    {
+     "Language": "en-US",
+     "Title": "Case Closed: The Fist of Blue Sapphire"
+    },
+    {
+     "Language": "es-ES",
+     "Title": "Detective Conan 23: El puño de Zafiro Azul"
+    },
+    {
+     "Language": "es-MX",
+     "Title": "Detective Conan: El puño de zafiro azul"
+    },
+    {
+     "Language": "ca-ES",
+     "Title": "El detectiu Conan: El puny de safir blau"
+    }
+   ]
+  },
+  {
+   "TmdbId": 662638,
+   "ImdbId": "tt12093860",
+   "Title": "Detective Conan: The Scarlet Bullet",
+   "OriginalTitle": "名探偵コナン 緋色の弾丸",
+   "Year": 2021,
+   "InCinema": "2021-04-16T00:00:00Z",
+   "Runtime": 110,
+   "Translations": [
+    {
+     "Language": "en-US",
+     "Title": "Detective Conan: The Scarlet Bullet"
+    },
+    {
+     "Language": "es-ES",
+     "Title": "Detective Conan 24: La bala escarlata"
+    },
+    {
+     "Language": "es-MX",
+     "Title": "Detective Conan 24: La bala escarlata"
+    },
+    {
+     "Language": "ca-ES",
+     "Title": "El detectiu Conan: La bala escarlata"
+    }
+   ]
+  },
+  {
+   "TmdbId": 903939,
+   "ImdbId": "tt19770970",
+   "Title": "Detective Conan: The Bride of Halloween",
+   "OriginalTitle": "名探偵コナン ハロウィンの花嫁",
+   "Year": 2022,
+   "InCinema": "2022-04-15T00:00:00Z",
+   "Runtime": 111,
+   "Translations": [
+    {
+     "Language": "en-US",
+     "Title": "Detective Conan: The Bride of Halloween"
+    },
+    {
+     "Language": "es-ES",
+     "Title": "Detective Conan 25: La novia de Halloween"
+    },
+    {
+     "Language": "ca-ES",
+     "Title": "El detectiu Conan: La núvia de Halloween"
+    }
+   ]
+  },
+  {
+   "TmdbId": 1047041,
+   "ImdbId": "tt27521477",
+   "Title": "Detective Conan: Black Iron Submarine",
+   "OriginalTitle": "名探偵コナン 黒鉄の魚影（サブマリン）",
+   "Year": 2023,
+   "InCinema": "2023-04-14T00:00:00Z",
+   "Runtime": 110,
+   "Translations": [
+    {
+     "Language": "en-US",
+     "Title": "Detective Conan: Black Iron Submarine"
+    },
+    {
+     "Language": "ca-ES",
+     "Title": "Detectiu Conan: Black iron submarine"
+    },
+    {
+     "Language": "es-ES",
+     "Title": "Detective Conan 26: El submarino de hierro negro"
+    }
+   ]
+  },
+  {
+   "TmdbId": 1209217,
+   "ImdbId": "tt31474158",
+   "Title": "Detective Conan: The Million-Dollar Pentagram",
+   "OriginalTitle": "名探偵コナン 100万ドルの五稜星（みちしるべ）",
+   "Year": 2024,
+   "InCinema": "2024-04-12T00:00:00Z",
+   "Runtime": 110,
+   "Translations": [
+    {
+     "Language": "ca-ES",
+     "Title": "Detectiu Conan: The million dollar pentagram"
+    },
+    {
+     "Language": "en-US",
+     "Title": "Detective Conan: The Million-Dollar Pentagram"
+    },
+    {
+     "Language": "es-ES",
+     "Title": "Detective Conan 27: La estrella guía de un millón de dólares"
+    }
+   ]
+  },
+  {
+   "TmdbId": 1396965,
+   "ImdbId": "tt35444710",
+   "Title": "Detective Conan: One-Eyed Flashback",
+   "OriginalTitle": "名探偵コナン 隻眼の残像",
+   "Year": 2025,
+   "InCinema": "2025-04-18T00:00:00Z",
+   "Runtime": 109,
+   "Translations": [
+    {
+     "Language": "en-US",
+     "Title": "Detective Conan: One-Eyed Flashback"
+    },
+    {
+     "Language": "es-ES",
+     "Title": "Detective Conan 28: One-eyed Flashback"
+    },
+    {
+     "Language": "ca-ES",
+     "Title": "El detectiu Conan: One-eyed flashback"
+    }
+   ]
+  },
+  {
+   "TmdbId": 1545621,
+   "ImdbId": "tt39123115",
+   "Title": "Detective Conan: Fallen Angel of the Highway",
+   "OriginalTitle": "名探偵コナン ハイウェイの堕天使",
+   "Year": 2026,
+   "InCinema": "2026-04-10T00:00:00Z",
+   "Runtime": 109,
+   "Translations": [
+    {
+     "Language": "en-US",
+     "Title": "Detective Conan: Fallen Angel of the Highway"
+    },
+    {
+     "Language": "ca-ES",
+     "Title": "El detectiu Conan: L'àngel caigut de la carretera"
+    },
+    {
+     "Language": "es-MX",
+     "Title": "Detective Conan: El ángel caído de la carretera"
+    },
+    {
+     "Language": "es-ES",
+     "Title": "Detective Conan 29: El ángel caído de la carretera"
+    }
+   ]
+  }
+ ]
+}

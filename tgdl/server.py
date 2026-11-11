@@ -47,6 +47,7 @@ from .runtime import LOCKABLE_FIELDS, RuntimeConfig
 from .telegram.gateway import (ChatUnavailable, FloodWait, LoginError, NotAuthorized, NotConfigured,
                                TelegramError)
 from .telegram.service import TelegramService
+from .tmdb import TmdbClient, TmdbError
 from .tvdb import Show, TvdbClient, TvdbError
 
 log = logging.getLogger(__name__)
@@ -188,7 +189,8 @@ def create_app(settings_store: Optional[SettingsStore] = None, *, db: Database, 
                events: EventBroadcaster, runtime: Optional[RuntimeConfig] = None,
                auth: Optional[AuthManager] = None, web_dir: Optional[Path] = None,
                data_dir: Optional[Path] = None, manage_telegram: bool = False,
-               tvdb: Optional[TvdbClient] = None, downloads: Optional[DownloadManager] = None) -> FastAPI:
+               tvdb: Optional[TvdbClient] = None, downloads: Optional[DownloadManager] = None,
+               tmdb: Optional[TmdbClient] = None) -> FastAPI:
     """Build the app. With ``manage_telegram`` the lifespan starts/stops the Telegram service and the downloads."""
     rt = runtime or RuntimeConfig()
     store = settings_store or SettingsStore()
@@ -575,7 +577,17 @@ def create_app(settings_store: Optional[SettingsStore] = None, *, db: Database, 
 
     sab = SabnzbdService(db, store.get, downloads=dl, placer=placer)
     app.state.sab = sab
-    indexer = arr.Indexer(db, lambda src: source_show(src)[0])
+    tmdb_client = tmdb or TmdbClient(db)
+    app.state.tmdb = tmdb_client
+
+    def source_collection(src: Any) -> Any:
+        try:
+            return tmdb_client.collection(src.options.tmdb_collection) if src.options.tmdb_collection else None
+        except TmdbError as exc:
+            log.warning("Font «%s»: %s", src.title, exc)
+            return None
+
+    indexer = arr.Indexer(db, lambda src: source_show(src)[0], source_collection)
     app.state.indexer = indexer
 
     def after_download(source_id: int, msg_id: int) -> None:
@@ -626,10 +638,20 @@ def create_app(settings_store: Optional[SettingsStore] = None, *, db: Database, 
         wants_movies = t == "movie" or (bool(cats) and all(2000 <= c < 3000 for c in cats))
         q = (params.get("q") or "").strip()
         tvdb_id = int_param(params.get("tvdbid")) or None
+        tmdb_id = int_param(params.get("tmdbid")) or None
+        imdb_id = (params.get("imdbid") or "").strip().lower().removeprefix("tt") or None
+        if imdb_id and not imdb_id.isdigit():
+            imdb_id = None
+        wants_movies = wants_movies or bool(tmdb_id or imdb_id)
         offset, limit = int_param(params.get("offset")), int_param(params.get("limit"), 100) or 100
         try:
             if wants_movies:
-                found: list[arr.Item] = []          # films: not yet (no TMDB ids in Telegram files)
+                if q or tmdb_id or imdb_id:
+                    found: list[arr.Item] = await call(indexer.movie_search, q, tmdb_id, imdb_id)
+                else:
+                    found = await call(indexer.movie_rss) or [arr.placeholder_item(movies=True)]
+            elif not q and not tvdb_id and not cats and t == "search":
+                found = (await call(indexer.rss)) + (await call(indexer.movie_rss)) or [arr.placeholder_item()]
             elif not q and not tvdb_id:
                 found = await call(indexer.rss) or [arr.placeholder_item()]   # an empty feed fails Sonarr's test
             else:
@@ -637,8 +659,9 @@ def create_app(settings_store: Optional[SettingsStore] = None, *, db: Database, 
         except Exception as exc:
             log.warning("Newznab: la cerca ha fallat (%s): %s", q, exc)
             return xml(arr.error_xml(900, f"Error: {exc}"))
-        log.info("Newznab t=%s q=%r%s season=%s ep=%s -> %d resultats", t, q,
-                 f" tvdbid={tvdb_id}" if tvdb_id else "", params.get("season"), params.get("ep"), len(found))
+        ids = "".join(f" {k}={v}" for k, v in (("tvdbid", tvdb_id), ("tmdbid", tmdb_id), ("imdbid", imdb_id)) if v)
+        log.info("Newznab t=%s q=%r%s season=%s ep=%s -> %d resultats", t, q, ids, params.get("season"),
+                 params.get("ep"), len(found))
         return xml(arr.rss_feed(found[offset:offset + limit], base_url=str(request.base_url),
                                 api_key=str(store.get().api_key), offset=offset, total=len(found)))
 
