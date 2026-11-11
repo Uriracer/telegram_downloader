@@ -591,6 +591,7 @@ function sourceSummary(src, { detail = false } = {}) {
         placingLine(src),
         h('div', { class: 'counts' }, countPills(src))),
       h('div', { class: 'row' },
+        src.options?.wikipedia_list && src.options?.kind === 'series' ? h('button', { type: 'button', class: 'btn btn-small', text: 'Posa els títols en català', title: 'Posa el títol i la sinopsi de la Viquipèdia als .nfo que ha creat aquesta aplicació (els altres no es toquen)', onclick: (ev) => updateTitles(src, ev.currentTarget) }) : null,
         canPlace(src) ? h('button', { type: 'button', class: 'btn btn-small', text: 'Col·loca a la biblioteca', title: 'Descomprimeix els episodis baixats i els posa a la carpeta de la sèrie, amb el nom que entén Jellyfin', disabled: Boolean(src.placing), onclick: (ev) => placeSource(src, ev.currentTarget) }) : null,
         h('button', { type: 'button', class: 'btn btn-small btn-primary', text: 'Baixa el que falta', title: 'Posa a la cua la millor còpia de cada episodi que no és a la biblioteca', onclick: (ev) => queueMissing(src, ev.currentTarget) }),
         h('button', { type: 'button', class: 'btn btn-small', text: 'Indexa ara', disabled: Boolean(src.indexing), onclick: () => indexSource(src.id, false) }),
@@ -626,6 +627,9 @@ function sourceOptionsForm(src) {
   h('div', {}, h('label', { for: 'opt-tvdb_id', text: 'Id de TheTVDB' }),
     h('input', { id: 'opt-tvdb_id', 'data-opt': 'tvdb_id', type: 'text', inputmode: 'numeric', pattern: '[0-9]*', value: o.tvdb_id ? String(o.tvdb_id) : '', placeholder: 'p. ex. 72454 (Detectiu Conan)' }),
     h('p', { class: 'help', text: "El número de l'adreça de la sèrie a thetvdb.com, o el que surt a la carpeta de Jellyfin «[tvdbid-…]». 0 = cap." })),
+  h('div', {}, h('label', { for: 'opt-wikipedia_list', text: "Llista d'episodis a la Viquipèdia" }),
+    h('input', { id: 'opt-wikipedia_list', 'data-opt': 'wikipedia_list', type: 'text', value: o.wikipedia_list || '', placeholder: "p. ex. Llista d'episodis d'El detectiu Conan" }),
+    h('p', { class: 'help', text: "Títols i sinopsis en català per als .nfo (pel número japonès). Buida = el títol del fitxer o el de TheTVDB." })),
   h('div', {}, h('label', { for: 'opt-tmdb_collection', text: 'Col·lecció de TMDB (pel·lícules)' }),
     h('input', { id: 'opt-tmdb_collection', 'data-opt': 'tmdb_collection', type: 'text', inputmode: 'numeric', pattern: '[0-9]*', value: o.tmdb_collection ? String(o.tmdb_collection) : '', placeholder: 'p. ex. 39199 (Detectiu Conan)' }),
     h('p', { class: 'help', text: "Per a les fonts de pel·lícules: «DC-Movie 22» és la 22a pel·lícula de la col·lecció per data d'estrena. Així Radarr la troba pel seu id de TMDB. 0 = cap." })),
@@ -652,6 +656,15 @@ function placingLine(src) {
   if (!last.errors?.length) return h('div', { class: 'source-meta', text });
   return h('details', { class: 'source-meta' }, h('summary', {}, text, ' ', pill('Errors', 'pill-err')),
     h('ul', {}, last.errors.map((e) => h('li', {}, h('strong', { text: e.name }), `: ${e.error}`))));
+}
+
+async function updateTitles(src, button) {
+  button.disabled = true;
+  try {
+    const res = await api(`sources/${src.id}/titles`, { method: 'POST', body: {} });
+    const extra = res.missing.length ? ` ${plural(res.missing.length, 'episodi no és', 'episodis no són')} a la Viquipèdia.` : '';
+    toast(`${plural(res.updated, '.nfo actualitzat', '.nfo actualitzats')}; ${res.unchanged} ja els tenien.${extra}`, { kind: 'success' });
+  } catch (e) { showError(e, "No s'han pogut posar els títols"); } finally { button.disabled = false; }
 }
 
 async function placeSource(src, button) {

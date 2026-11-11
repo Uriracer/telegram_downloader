@@ -1,0 +1,45 @@
+== Temporada 22 (2017) ==
+{| class=wikitable
+|-
+! style=background-color:#20B36F colspan=3 | EP#
+! style=background-color:#20B36F rowspan=2 | Títol en català
+! style=background-color:#20B36F rowspan=2 width=8% | Adaptat de
+! style=background-color:#20B36F rowspan=2 width=16% | Estrena en japonès
+! style=background-color:#20B36F rowspan=2 width=16% | Estrena en català
+|-
+! style=background-color:#20B36F width=4% | {{Abr|Cat.|Número global de l'episodi segons el criteri català i internacional}}
+! style=background-color:#20B36F width=4% | {{Abr|Jap.|Número global de l'episodi segons el criteri japonès}}
+! style=background-color:#20B36F width=4% | {{Abr|Temp.|Número de l'episodi dins de la temporada}}
+|-
+| style=text-align:center;font-weight:bold | 941
+| style=text-align:center;font-weight:bold | 886
+| style=text-align:center;font-weight:bold | 42
+| '''Resolent misteris al [[Cafè Poirot]]. Segona part.'''<br />''"Poaro Kafe no Nazotoki (Kōhen)"'' (ポアロカフェの謎解き (後編))
+| style=text-align:center | 961-962
+| style=text-align:center | 23 de desembre del 2017
+| style=text-align:center | 5 d'agost del 2021<ref>{{ref-web |url=https://example.org |títol=Estrena}}</ref>
+|-
+| colspan=7 | Cap dels tres sospitosos d'haver apunyalat en [[Tengo Anzai|en Tengo]] té taques de sang. ''L'home de la gavardina'' ajudarà en Conan.
+|}
+
+== Temporada 23 (2018) ==
+{| class=wikitable
+|-
+| style=text-align:center;font-weight:bold | 942
+| style=text-align:center;font-weight:bold | 887
+| style=text-align:center;font-weight:bold | 1
+| '''En Kaito Kid i la caixa secreta. Primera part.'''<br />''"Kaitō Kiddo no Karakuri-bako (Zenpen)"''
+| style=text-align:center | 963-965
+| style=text-align:center | 6 de gener del 2018
+| style=text-align:center | 6 d'agost del 2021
+|-
+| colspan=7 | Després de la mort del seu marit, la senyora Tomoyose fa donació de 10.000 llibres a la biblioteca.
+|-
+| style=background-color:#ADD8E6;text-align:center;font-weight:bold | 943
+| style=background-color:#ADD8E6;text-align:center;font-weight:bold | 888
+| style=background-color:#ADD8E6;text-align:center;font-weight:bold | 2
+| '''En Kaito Kid i la caixa secreta. Segona part.'''
+| style=text-align:center | 963-965
+| style=text-align:center | 13 de gener del 2018
+| style=text-align:center | 7 d'agost del 2021
+|}
