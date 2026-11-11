@@ -4,6 +4,28 @@ Format basat en [Keep a Changelog](https://keepachangelog.com/ca/1.1.0/); versio
 
 ## [0.1.0] — en desenvolupament
 
+### Fase 3: baixades
+- **Cua de baixades**: «Baixa el que falta» posa a la cua la millor còpia completa de cada episodi que no és
+  a la biblioteca (un sol cop cada volum penjat dues vegades); també fitxer a fitxer. Pel·lícules i altres:
+  tot menys les fotos.
+- **Represa per blocs**: cada fitxer es baixa a blocs de 512 KB escrits al seu lloc dins d'un `.part`, i un
+  `.part.json` diu quins hi són. Després d'una pausa, d'un reinici o d'un tall de llum només es baixa el que
+  falta; un `.part` sense el seu `.part.json` (com els de `tdl`) es comença de nou. Els fitxers començats
+  passen davant de la cua.
+- **Watchdog**: cada petició té un temps màxim (*Reconnecta si un fitxer no avança en*); si Telegram no
+  respon es torna a demanar, amb pauses creixents. Després de 8 errors seguits el fitxer passa a «Error» amb
+  el motiu i la resta de la cua continua. `FLOOD_WAIT` s'espera sense comptar com a error.
+- **Paral·lelisme**: *Fitxers alhora* i *Connexions per fitxer* (blocs del mateix fitxer alhora).
+- **Mai al disc equivocat**: es comprova el sentinella del NAS abans de cada escriptura; si desapareix, les
+  baixades tornen a la cua amb el que tenien i no s'escriu res fins que torna. No es comença cap baixada amb
+  menys d'1 GB lliure, ni un fitxer que no hi cap.
+- Pestanya **Baixades**: progrés, velocitat, temps restant, connexions, reintents i esperes de Telegram,
+  avís si el compte no és Premium, **Pausa** / **Reprèn** (es recorda després de reiniciar) i
+  **Treu de la cua** (el que ja s'ha baixat es guarda).
+- Els fitxers queden a `<carpeta temporal>/src-<font>/` amb el nom original (sanejat) i passen a «Baixat».
+- API: `POST /api/sources/{id}/queue` (`msg_ids` o `missing`), `POST /api/sources/{id}/unqueue`,
+  `GET /api/downloads`, `POST /api/downloads/pause` i `/resume`; esdeveniment SSE `downloads`.
+
 ### Fase 2: revisió abans de baixar
 - **Reconeixement dels noms** dels quatre formats de les còpies del Detectiu Conan (`Animelliure_DC_001_…`,
   `13x501_…`, `10x424-…`, `…_Conan_525_…`, `DC-928 (…) [CRC].part1.rar`) i dels habituals (`S01E05`, `1x05`).

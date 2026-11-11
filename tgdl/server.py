@@ -3,6 +3,9 @@
 Blocking work (SQLite, waiting on the Telegram loop) runs in the threadpool
 (``run_in_threadpool``) so the event loop stays responsive.
 
+Downloads (``/api/downloads``, ``/api/sources/{id}/queue``) are run by
+:class:`~tgdl.downloads.DownloadManager` on the Telegram service's loop.
+
 Telegram errors become HTTP errors with a Catalan ``detail``:
 ``LoginError`` 400, ``NotConfigured``/``NotAuthorized`` 409, ``ChatUnavailable``
 404, ``FloodWait`` 429 (+ ``Retry-After``), other ``TelegramError`` 502.
@@ -30,6 +33,7 @@ from . import files, review, storage
 from .auth import COOKIE_NAME, SESSION_SECONDS, AuthManager, password_problem
 from .config import Settings, validation_errors
 from .db import DOWNLOADED, ERROR, IN_LIBRARY, NEW, QUEUED, STATES, Database, SourceOptions
+from .downloads import DownloadManager
 from .events import CLOSE, EventBroadcaster, sse
 from .guard import LocalGuardMiddleware
 from .naming import parse as parse_name
@@ -143,6 +147,16 @@ class IndexRequest(BaseModel):
     full: bool = False
 
 
+class QueueRequest(BaseModel):
+    #: Files to queue; empty with ``missing`` = what is missing from the library (see review.wanted).
+    msg_ids: list[int] = Field(default_factory=list, max_length=100_000)
+    missing: bool = False
+
+
+class UnqueueRequest(BaseModel):
+    msg_ids: list[int] = Field(min_length=1, max_length=100_000)
+
+
 class ImportRequest(BaseModel):
     path: str = Field(min_length=1, max_length=4096)
     dry_run: bool = False
@@ -163,8 +177,8 @@ def create_app(settings_store: Optional[SettingsStore] = None, *, db: Database, 
                events: EventBroadcaster, runtime: Optional[RuntimeConfig] = None,
                auth: Optional[AuthManager] = None, web_dir: Optional[Path] = None,
                data_dir: Optional[Path] = None, manage_telegram: bool = False,
-               tvdb: Optional[TvdbClient] = None) -> FastAPI:
-    """Build the app. With ``manage_telegram`` the lifespan starts/stops the Telegram service."""
+               tvdb: Optional[TvdbClient] = None, downloads: Optional[DownloadManager] = None) -> FastAPI:
+    """Build the app. With ``manage_telegram`` the lifespan starts/stops the Telegram service and the downloads."""
     rt = runtime or RuntimeConfig()
     store = settings_store or SettingsStore()
     if auth is None:
@@ -173,11 +187,13 @@ def create_app(settings_store: Optional[SettingsStore] = None, *, db: Database, 
     authm: AuthManager = auth
     tg = telegram
     tvdb_client = tvdb or TvdbClient(db)
+    dl = downloads or DownloadManager(store.get, db, tg, events.publish)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         if manage_telegram:
             await run_in_threadpool(tg.start)
+            dl.start()
         try:
             yield
         finally:
@@ -195,6 +211,7 @@ def create_app(settings_store: Optional[SettingsStore] = None, *, db: Database, 
     app.state.auth = authm
     app.state.runtime = rt
     app.state.tvdb = tvdb_client
+    app.state.downloads = dl
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(_request: Any, exc: RequestValidationError) -> JSONResponse:
@@ -332,6 +349,7 @@ def create_app(settings_store: Optional[SettingsStore] = None, *, db: Database, 
         if (new.telegram_api_id, new.telegram_api_hash) != (current.telegram_api_id, current.telegram_api_hash):
             log.info("Credencials de l'API de Telegram canviades; es reinicia el client.")
             await call(tg.reconfigure)
+        dl.wake()      # more parallel files, another folder…
         return public_settings(new, store.locked)
 
     @app.get("/api/storage")
@@ -435,6 +453,7 @@ def create_app(settings_store: Optional[SettingsStore] = None, *, db: Database, 
         await call(require_source, source_id)
         if tg.indexing(source_id):
             raise HTTPException(status_code=409, detail="S'està indexant aquesta font; espera que acabi.")
+        dl.forget_source(source_id)
         await call(db.delete_source, source_id)
         events.publish("source_deleted", {"id": source_id})
         return {"ok": True}
@@ -605,6 +624,63 @@ def create_app(settings_store: Optional[SettingsStore] = None, *, db: Database, 
             events.publish("source", result["source"])
         return result
 
+    # -------------------------------------------------------------- downloads
+    def run_queue(source_id: int, body: QueueRequest) -> dict[str, Any]:
+        src = db.source(source_id)
+        if src is None:
+            raise HTTPException(status_code=404, detail="Aquesta font no existeix.")
+        result: dict[str, Any] = {"queued": 0, "skipped_unrecognized": 0, "skipped_incomplete": 0, "in_library": 0}
+        ids = list(body.msg_ids)
+        if body.missing:
+            show, tvdb_error = source_show(src)
+            if tvdb_error:
+                raise HTTPException(status_code=502, detail=tvdb_error)
+            library, info = source_library(src, show)
+            if info["problem"] and src.options.kind == "series":
+                raise HTTPException(status_code=409, detail=info["problem"])
+            want = review.wanted(db.all_messages(source_id), numbering=src.options.numbering, show=show,
+                                 library=library, kind=src.options.kind)
+            ids += want.pop("msg_ids")
+            result.update(want)
+        if not ids and not body.missing:
+            raise HTTPException(status_code=422, detail="No hi ha cap fitxer per posar a la cua.")
+        result["queued"] = db.set_state(source_id, sorted(set(ids)), QUEUED, only_from=(NEW, ERROR))
+        if result["queued"]:
+            log.info("«%s»: %d fitxers a la cua de baixades", src.title, result["queued"])
+        result["source"] = tg.source_payload(source_id)
+        return result
+
+    @app.post("/api/sources/{source_id}/queue")
+    async def source_queue(source_id: int, body: QueueRequest) -> dict[str, Any]:
+        result = await call(run_queue, source_id, body)
+        if result.get("source"):
+            events.publish("source", result["source"])
+        dl.wake()
+        events.publish("downloads", await call(dl.status))
+        return result
+
+    @app.post("/api/sources/{source_id}/unqueue")
+    async def source_unqueue(source_id: int, body: UnqueueRequest) -> dict[str, Any]:
+        await call(require_source, source_id)
+        changed = await call(dl.unqueue, source_id, body.msg_ids)
+        payload = tg.source_payload(source_id)
+        if payload:
+            events.publish("source", payload)
+        events.publish("downloads", await call(dl.status))
+        return {"unqueued": changed, "source": payload}
+
+    @app.get("/api/downloads")
+    async def downloads_status() -> dict[str, Any]:
+        return await call(dl.status)
+
+    @app.post("/api/downloads/pause")
+    async def downloads_pause() -> dict[str, Any]:
+        return await call(dl.pause)
+
+    @app.post("/api/downloads/resume")
+    async def downloads_resume() -> dict[str, Any]:
+        return await call(dl.resume)
+
     @app.get("/api/fs")
     async def browse_folders(path: str = Query("", max_length=4096)) -> dict[str, Any]:
         try:
@@ -631,6 +707,8 @@ def create_app(settings_store: Optional[SettingsStore] = None, *, db: Database, 
             try:
                 yield "retry: 3000\n\n"
                 yield sse("telegram", json.dumps(tg.status(), ensure_ascii=False, default=str))
+                yield sse("downloads", json.dumps(await run_in_threadpool(dl.status), ensure_ascii=False,
+                                                  default=str))
                 while True:
                     try:
                         item = await asyncio.wait_for(sub.queue.get(), timeout=KEEPALIVE_SECONDS)

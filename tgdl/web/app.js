@@ -29,6 +29,8 @@ const state = {
   /** @type {number | null} */
   openSource: null,
   msgQuery: { q: '', state: '', offset: 0 },
+  /** @type {Record<string, any> | null} GET /api/downloads, "downloads" events */
+  downloads: null,
   view: 'telegram',
   /** @type {Record<string, any> | null} */
   auth: null,
@@ -588,6 +590,7 @@ function sourceSummary(src, { detail = false } = {}) {
         h('div', { class: 'source-meta' }, indexingLine(src)),
         h('div', { class: 'counts' }, countPills(src))),
       h('div', { class: 'row' },
+        h('button', { type: 'button', class: 'btn btn-small btn-primary', text: 'Baixa el que falta', title: 'Posa a la cua la millor còpia de cada episodi que no és a la biblioteca', onclick: (ev) => queueMissing(src, ev.currentTarget) }),
         h('button', { type: 'button', class: 'btn btn-small', text: 'Indexa ara', disabled: Boolean(src.indexing), onclick: () => indexSource(src.id, false) }),
         detail ? h('button', { type: 'button', class: 'btn btn-small', text: 'Reindexa sencer', title: 'Torna a llegir tot el canal (detecta missatges esborrats)', disabled: Boolean(src.indexing), onclick: () => indexSource(src.id, true) }) : null,
         detail ? h('button', { type: 'button', class: 'btn btn-small btn-danger-ghost', text: 'Elimina', onclick: () => deleteSource(src) }) : null)),
@@ -626,6 +629,36 @@ function sourceOptionsForm(src) {
     h('p', { class: 'help', text: "La que llegeix Jellyfin. Buida = la que porta «[tvdbid-…]» dins la biblioteca de sèries. Els episodis que hi ha no es baixaran mai." })),
   h('div', {}, h('label', { class: 'check' }, auto, h('span', { text: "Refresca l'índex automàticament" }))));
   return h('details', { class: 'source-options' }, h('summary', { text: 'Opcions de la font' }), form);
+}
+
+async function queueMissing(src, button) {
+  button.disabled = true;
+  try {
+    const res = await api(`sources/${src.id}/queue`, { method: 'POST', body: { missing: true } });
+    if (res.source) state.sources.set(src.id, res.source);
+    const notes = [];
+    if (res.in_library) notes.push(`${plural(res.in_library, 'episodi ja és', 'episodis ja són')} a la biblioteca`);
+    if (res.skipped_unrecognized) notes.push(`${plural(res.skipped_unrecognized, 'arxiu', 'arxius')} sense número (tria'ls a mà a «Fitxers»)`);
+    if (res.skipped_incomplete) notes.push(plural(res.skipped_incomplete, 'arxiu incomplet', 'arxius incomplets'));
+    const extra = notes.length ? ` ${notes.join('; ')}.` : '';
+    if (res.queued) {
+      toast(`${plural(res.queued, 'fitxer', 'fitxers')} a la cua.${extra}`,
+        { kind: 'success', action: { label: 'Mira les baixades', run: () => showView('downloads') } });
+    } else {
+      toast(`No hi ha res de nou per baixar.${extra}`, { kind: 'info' });
+    }
+    renderSources();
+    loadMessages();
+  } catch (e) { showError(e, "No s'ha pogut posar a la cua"); } finally { button.disabled = false; }
+}
+
+async function queueFiles(sourceId, msgIds, queue = true) {
+  try {
+    const res = await api(`sources/${sourceId}/${queue ? 'queue' : 'unqueue'}`, { method: 'POST', body: { msg_ids: msgIds } });
+    if (res.source) state.sources.set(sourceId, res.source);
+    renderSources();
+    loadMessages();
+  } catch (e) { showError(e); }
 }
 
 async function indexSource(id, full) {
@@ -806,6 +839,13 @@ function messagesPanel() {
     h('div', { id: 'msg-pager', class: 'pager' }));
 }
 
+let messagesTimer = 0;
+/** Reload the file list at most every second and a half (downloads change states often). */
+function loadMessagesSoon() {
+  if (messagesTimer) return;
+  messagesTimer = setTimeout(() => { messagesTimer = 0; loadMessages(); }, 1500);
+}
+
 async function loadMessages() {
   const id = state.openSource;
   if (!id) return;
@@ -818,6 +858,17 @@ async function loadMessages() {
   } catch (e) { showError(e); }
 }
 
+function messageAction(m) {
+  const id = state.openSource;
+  if (m.state === 'new' || m.state === 'error') {
+    return h('button', { type: 'button', class: 'btn btn-small', text: m.state === 'error' ? 'Torna-ho a provar' : 'Baixa', onclick: () => queueFiles(id, [m.msg_id]) });
+  }
+  if (m.state === 'queued' || m.state === 'downloading') {
+    return h('button', { type: 'button', class: 'btn btn-small btn-danger-ghost', text: 'Treu de la cua', title: "El que ja s'ha baixat es guarda per a més endavant", onclick: () => queueFiles(id, [m.msg_id], false) });
+  }
+  return null;
+}
+
 function renderMessages(data) {
   const table = $('#msg-table');
   if (!table) return;
@@ -826,7 +877,7 @@ function renderMessages(data) {
   } else {
     setChildren(table, h('div', { class: 'table-wrap' }, h('table', { class: 'list' },
       h('thead', {}, h('tr', {}, h('th', { class: 'num', text: 'Missatge' }), h('th', { text: 'Fitxer' }), h('th', { text: 'Episodi' }), h('th', { class: 'num', text: 'Mida' }),
-        h('th', { text: 'Data' }), h('th', { text: 'Estat' }))),
+        h('th', { text: 'Data' }), h('th', { text: 'Estat' }), h('th', { text: '' }))),
       h('tbody', {}, data.items.map((m) => {
         const [label, kind] = MESSAGE_STATES[m.state] || [m.state, ''];
         return h('tr', {},
@@ -835,7 +886,10 @@ function renderMessages(data) {
           h('td', { class: 'mono nowrap' }, m.episode || h('span', { class: 'muted', text: '—' }), m.volume > 1 ? h('div', { class: 'msg-text', text: `volum ${m.volume}` }) : null),
           h('td', { class: 'num', text: formatBytes(m.size) }),
           h('td', { text: formatDate(m.date) }),
-          h('td', {}, pill(label, kind), m.error ? h('div', { class: 'msg-text', text: m.error }) : null));
+          h('td', {}, pill(label, kind),
+            (m.state === 'downloading' || m.state === 'queued') && m.bytes_done > 0 && m.size ? h('div', { class: 'msg-text', text: `${Math.floor((100 * m.bytes_done) / m.size)} %` }) : null,
+            m.error ? h('div', { class: 'msg-text', text: m.error }) : null),
+          h('td', { class: 'nowrap' }, messageAction(m)));
       })))));
   }
   const { offset } = state.msgQuery;
@@ -848,10 +902,80 @@ function renderMessages(data) {
 }
 
 // ---------------------------------------------------------------------------
+// Downloads
+// ---------------------------------------------------------------------------
+
+const JOB_STATUS = {
+  starting: 'Preparant…',
+  downloading: 'Baixant',
+  waiting: 'Esperant (Telegram)',
+  retrying: 'Tornant-ho a provar',
+  finishing: 'Acabant…',
+};
+
+async function setPaused(paused) {
+  try {
+    state.downloads = await api(`downloads/${paused ? 'pause' : 'resume'}`, { method: 'POST' });
+    renderDownloads();
+  } catch (e) { showError(e); }
+}
+
+function jobCard(job) {
+  const pct = job.size ? Math.min(100, (100 * job.bytes_done) / job.size) : 0;
+  const bar = h('div', { class: 'progress-bar' });
+  bar.style.width = `${pct.toFixed(1)}%`;   // CSSOM: allowed by the CSP (inline style attributes are not)
+  const facts = [`${formatBytes(job.bytes_done)} de ${formatBytes(job.size)} (${Math.floor(pct)} %)`];
+  if (job.speed) facts.push(`${formatBytes(job.speed)}/s`);
+  if (job.eta != null) facts.push(formatEta(job.eta));
+  if (job.connections > 1) facts.push(`${job.connections} connexions`);
+  const warn = job.status === 'retrying' || job.status === 'waiting';
+  return h('li', { class: 'dl-job card', dataset: { status: job.status } },
+    h('div', { class: 'row-between' },
+      h('div', { class: 'grow' },
+        h('strong', { class: 'name', text: job.file_name }),
+        h('div', { class: 'source-meta', text: job.source_title })),
+      h('div', { class: 'row' },
+        pill(JOB_STATUS[job.status] || job.status, warn ? 'pill-warn' : 'pill-info'),
+        h('button', { type: 'button', class: 'btn btn-small btn-danger-ghost', text: 'Treu de la cua', title: "El que ja s'ha baixat es guarda per a més endavant", onclick: () => queueFiles(job.source_id, [job.msg_id], false) }))),
+    h('div', { class: 'progress', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(Math.floor(pct)), 'aria-label': job.file_name }, bar),
+    h('div', { class: 'source-meta', text: facts.join(' · ') }),
+    job.note ? h('div', { class: 'msg-text', text: job.note }) : null);
+}
+
+function renderDownloads() {
+  const d = state.downloads;
+  const active = d ? d.active.length : 0;
+  const badge = $('#downloads-badge');
+  badge.hidden = active === 0;
+  badge.textContent = String(active);
+  const box = $('#downloads-content');
+  if (!d) { setChildren(box, spinner('Carregant…')); return; }
+  const banners = [];
+  if (d.paused) banners.push(h('div', { class: 'banner banner-warn', text: "Les baixades estan en pausa. El que ja s'ha baixat es guarda." }));
+  else if (d.blocked) banners.push(h('div', { class: 'banner banner-error', text: d.blocked }));
+  if (d.premium === false && active) banners.push(h('div', { class: 'banner banner-info', text: 'El compte no és Premium: Telegram limita la velocitat de baixada.' }));
+  const total = d.queued + active;
+  const facts = [`Queden ${formatBytes(d.remaining)}`];
+  if (d.speed) facts.push(`${formatBytes(d.speed)}/s`);
+  if (d.eta != null) facts.push(formatEta(d.eta));
+  const summary = h('section', { class: 'card' },
+    h('div', { class: 'row-between' },
+      h('div', { class: 'grow' },
+        h('h2', { text: total ? `${plural(active, 'fitxer baixant-se', 'fitxers baixant-se')} · ${d.queued} en cua` : 'No hi ha res a la cua' }),
+        total ? h('div', { class: 'source-meta', text: facts.join(' · ') })
+          : h('p', { class: 'muted', text: 'Posa fitxers a la cua des de «Fonts»: «Baixa el que falta», o fitxer a fitxer.' })),
+      h('div', { class: 'row' },
+        d.paused
+          ? h('button', { type: 'button', class: 'btn btn-primary', text: 'Reprèn les baixades', onclick: () => setPaused(false) })
+          : h('button', { type: 'button', class: 'btn', text: 'Pausa', disabled: !total, onclick: () => setPaused(true) }))));
+  setChildren(box, ...banners, summary, active ? h('ul', { class: 'dl-jobs' }, d.active.map(jobCard)) : null);
+}
+
+// ---------------------------------------------------------------------------
 // Views, storage banner, live updates
 // ---------------------------------------------------------------------------
 
-const VIEW_HASHES = { telegram: '#telegram', sources: '#fonts', settings: '#configuracio' };
+const VIEW_HASHES = { telegram: '#telegram', sources: '#fonts', downloads: '#baixades', settings: '#configuracio' };
 
 function showView(view) {
   state.view = view;
@@ -860,7 +984,7 @@ function showView(view) {
     if (btn.dataset.view === view) btn.setAttribute('aria-current', 'page');
     else btn.removeAttribute('aria-current');
   }
-  for (const name of ['telegram', 'sources', 'settings']) $(`#view-${name}`).hidden = name !== view;
+  for (const name of Object.keys(VIEW_HASHES)) $(`#view-${name}`).hidden = name !== view;
   if (view === 'settings') loadSettingsForm();
 }
 
@@ -929,9 +1053,11 @@ function connectEvents() {
     const prev = state.sources.get(src.id);
     state.sources.set(src.id, src);
     renderSources();
-    if (state.openSource === src.id && prev?.indexing && !src.indexing) loadMessages();
+    const countsChanged = JSON.stringify(prev?.counts || {}) !== JSON.stringify(src.counts || {});
+    if (state.openSource === src.id && ((prev?.indexing && !src.indexing) || countsChanged)) loadMessagesSoon();
   });
   onEvent('source_deleted', ({ id }) => { state.sources.delete(id); renderSources(); });
+  onEvent('downloads', (d) => { state.downloads = d; renderDownloads(); });
   es.addEventListener('error', () => {
     if (state.locked) { es.close(); return; }
     setConnection('offline');

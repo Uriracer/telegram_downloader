@@ -1,9 +1,10 @@
 """The Telegram session, its login flows and the indexing of sources.
 
 Telethon is asyncio-only and its client belongs to the loop that created it,
-so the service owns **one event loop in its own thread**; the web server (and
-later the download manager) call into it with :meth:`TelegramService.call`
-(``run_coroutine_threadsafe``). Nothing else touches the gateway.
+so the service owns **one event loop in its own thread**; the web server calls
+into it with :meth:`TelegramService.call` (``run_coroutine_threadsafe``) and the
+download manager runs on it (:meth:`TelegramService.submit`). Nothing else
+touches the gateway.
 
 Session states (``status()["state"]``, pushed as ``telegram`` events)::
 
@@ -136,6 +137,16 @@ class TelegramService:
         except FutureTimeout:
             future.cancel()
             raise TelegramError("Telegram no ha respost a temps.") from None
+
+    def submit(self, factory: Callable[[], Awaitable[Any]]) -> None:
+        """Start ``factory()`` as a background task on the service loop (from any thread), e.g. the downloads."""
+        if self._loop is None:
+            raise RuntimeError("El servei de Telegram no està en marxa.")
+        self._loop.call_soon_threadsafe(lambda: self._spawn(factory()))
+
+    @property
+    def loop(self) -> Optional[asyncio.AbstractEventLoop]:
+        return self._loop
 
     def _spawn(self, coro: Awaitable[Any]) -> asyncio.Task:
         task = asyncio.ensure_future(coro)

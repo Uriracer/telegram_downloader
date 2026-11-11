@@ -17,8 +17,8 @@ from typing import AsyncIterator, Optional
 
 from .. import __version__
 from ..db import IndexedMessage
-from .gateway import (ChatUnavailable, Dialog, FloodWait, LoginError, Me, NotAuthorized, PasswordNeeded,
-                      QrExpired, QrToken, TelegramError, message_kind)
+from .gateway import (ChatUnavailable, Dialog, FileGone, FloodWait, LoginError, Me, NotAuthorized,
+                      PasswordNeeded, QrExpired, QrToken, RemoteFile, TelegramError, message_kind)
 
 log = logging.getLogger(__name__)
 
@@ -73,6 +73,8 @@ class TelethonGateway:
         if isinstance(exc, (errors.AuthKeyUnregisteredError, errors.AuthKeyDuplicatedError,
                             errors.UserDeactivatedBanError)):
             return NotAuthorized()
+        if isinstance(exc, (errors.MessageIdInvalidError, errors.FileIdInvalidError)):
+            return FileGone()
         if isinstance(exc, (errors.ChannelPrivateError, errors.ChatIdInvalidError, errors.PeerIdInvalidError)):
             return ChatUnavailable("Aquest xat no existeix o el compte ja no hi té accés.")
         if isinstance(exc, errors.RPCError):
@@ -245,3 +247,42 @@ class TelethonGateway:
             raise
         except Exception as exc:
             raise self._translate(exc) from exc
+
+    # ------------------------------------------------------------ downloads
+    async def remote_file(self, chat_id: int, msg_id: int) -> RemoteFile:
+        try:
+            entity = await self._entity(chat_id)
+            msg = await self.client.get_messages(entity, ids=msg_id)
+        except TelegramError:
+            raise
+        except Exception as exc:
+            raise self._translate(exc) from exc
+        if msg is None or msg.media is None or msg.file is None:
+            raise FileGone()
+        return RemoteFile(chat_id=chat_id, msg_id=msg_id, size=int(msg.file.size or 0), handle=msg.media)
+
+    async def read_block(self, remote: RemoteFile, offset: int, limit: int) -> bytes:
+        from telethon import errors
+
+        for attempt in range(2):
+            stream = self.client.iter_download(remote.handle, offset=offset, request_size=limit,
+                                               chunk_size=limit, limit=1, file_size=remote.size or None)
+            try:
+                return bytes(await stream.__anext__())
+            except StopAsyncIteration:
+                return b""
+            except (errors.FileReferenceExpiredError, errors.FileReferenceInvalidError):
+                # File references expire after a while: fetch the message again, once.
+                if attempt:
+                    raise TelegramError("Telegram no accepta la referència del fitxer.") from None
+                remote.handle = (await self.remote_file(remote.chat_id, remote.msg_id)).handle
+            except TelegramError:
+                raise
+            except Exception as exc:
+                raise self._translate(exc) from exc
+            finally:
+                try:
+                    await stream.close()
+                except Exception:   # pragma: no cover - best effort
+                    pass
+        raise TelegramError("Telegram no accepta la referència del fitxer.")   # pragma: no cover

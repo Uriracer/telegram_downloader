@@ -160,6 +160,54 @@ def _ranges(items: list[Any], present: set[str], key: Any) -> list[list[Any]]:
     return out
 
 
+#: States of a file that is already downloaded or on its way.
+_HAVE = frozenset({"queued", "downloading", "downloaded", "extracting", "extracted", "in_library"})
+
+
+def best_release(rels: list[Release]) -> Release:
+    """Of several copies of one episode, the one to download: complete, highest version, newest."""
+    return max(rels, key=lambda r: (r.complete, r.parsed.version, r.last_msg_id))
+
+
+def wanted(messages: Iterable[dict[str, Any]], *, numbering: str, show: Optional[Show] = None,
+           library: Optional[dict[str, str]] = None, kind: str = "series") -> dict[str, Any]:
+    """What «download what is missing» queues: the best complete copy of each episode not in the library.
+
+    Unrecognised and incomplete archives are left out (they are listed so the user can pick them by hand).
+    Movies and other content: every file that is not a photo.
+    """
+    messages = list(messages)
+    if kind != "series":
+        ids = [m["msg_id"] for m in messages if m.get("kind") != "photo"]
+        return {"msg_ids": ids, "skipped_unrecognized": 0, "skipped_incomplete": 0, "in_library": 0}
+    library = library or {}
+    releases, _others = build_releases(messages, numbering, show)
+    by_key: dict[str, list[Release]] = {}
+    unrecognized = 0
+    for rel in releases:
+        if rel.ref is None:
+            unrecognized += 1
+        else:
+            by_key.setdefault(rel.ref.key, []).append(rel)
+    ids: list[int] = []
+    incomplete = in_library = 0
+    for key, rels in by_key.items():
+        if key in library:
+            in_library += 1
+            continue
+        best = best_release(rels)
+        if not best.complete:
+            incomplete += 1
+            continue
+        for copies in best.volumes.values():
+            # A volume uploaded twice is downloaded once: the newest copy, unless one is already on its way.
+            if any(m.get("state") in _HAVE for m in copies):
+                continue
+            ids.append(max(copies, key=lambda m: m["msg_id"])["msg_id"])
+    return {"msg_ids": sorted(ids), "skipped_unrecognized": unrecognized, "skipped_incomplete": incomplete,
+            "in_library": in_library}
+
+
 def analyze(messages: Iterable[dict[str, Any]], *, numbering: str = ABSOLUTE, show: Optional[Show] = None,
             library: Optional[dict[str, str]] = None) -> dict[str, Any]:
     """The check report of a source (see module docstring)."""
@@ -180,7 +228,7 @@ def analyze(messages: Iterable[dict[str, Any]], *, numbering: str = ABSOLUTE, sh
 
     duplicates = []
     for key, rels in by_key.items():
-        best = max(rels, key=lambda r: (r.complete, r.parsed.version, r.last_msg_id))
+        best = best_release(rels)
         for r in rels:
             r.keep = r is best
         if len(rels) > 1 or best.reuploaded:

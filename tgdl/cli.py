@@ -183,6 +183,7 @@ def _serve(args: argparse.Namespace, log_file: Optional[Path], instance: Any, da
 
     from . import storage
     from .db import open_database
+    from .downloads import DownloadManager
     from .events import EventBroadcaster
     from .runtime import build_runtime, find_7zz
     from .server import SettingsStore, create_app
@@ -204,7 +205,10 @@ def _serve(args: argparse.Namespace, log_file: Optional[Path], instance: Any, da
     events = EventBroadcaster()
     telegram = TelegramService(store.get, db, events.publish, data_dir=data_dir)
     telegram.start()
-    app = create_app(store, db=db, telegram=telegram, events=events, runtime=runtime, data_dir=data_dir)
+    downloads = DownloadManager(store.get, db, telegram, events.publish)
+    downloads.start()
+    app = create_app(store, db=db, telegram=telegram, events=events, runtime=runtime, data_dir=data_dir,
+                     downloads=downloads)
 
     config = uvicorn.Config(app, log_config=None, access_log=False, timeout_graceful_shutdown=3, lifespan="on",
                             proxy_headers=runtime.trust_proxy,

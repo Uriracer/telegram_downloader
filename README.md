@@ -16,8 +16,8 @@ reprenien, fitxers que es tornaven a baixar i un NAS que de vegades no estava mu
 |---|---|---|
 | 0 | ✅ | Servidor web amb contrasenya, Docker amd64/arm64 amb `7zz`, **no escriure mai si el NAS no està muntat** |
 | 1 | ✅ | Sessió de Telegram (**codi QR** o telèfon + 2FA), xats amb el **nom sencer**, índex de cada font a SQLite |
-| 2 | ⏳ | Reconeixement de noms de capítols, mode de comprovació (què falta, repetits, CRC amb «DC»…), TheTVDB |
-| 3 | ⏳ | Baixada robusta: represa per *offset*, *watchdog*, paral·lelisme, Premium, velocitat i temps restant |
+| 2 | ✅ | Reconeixement de noms de capítols, mode de comprovació (què falta, repetits, CRC amb «DC»…), TheTVDB |
+| 3 | ✅ | Baixada robusta: represa per blocs, *watchdog*, paral·lelisme, Premium, velocitat i temps restant |
 | 4 | ⏳ | Descompressió (RAR5, multipart, ZIP, 7z) i col·locació a la biblioteca amb `.nfo` |
 | 5 | ⏳ | Sonarr i Radarr (indexador Newznab + client SABnzbd) i prova amb Sonarr i Radarr reals |
 | 6 | ⏳ | Títols en català (Viquipèdia) i verificació per títols |

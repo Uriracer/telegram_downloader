@@ -385,6 +385,44 @@ class Database:
                     [state, error, utcnow(), source_id, mid] + extra_params).rowcount
         return changed
 
+    # ------------------------------------------------------------ downloads
+    def next_queued(self, limit: int, exclude: Iterable[tuple[int, int]] = ()) -> list[dict[str, Any]]:
+        """The next files to download, with their chat id and source title.
+
+        Files already started come first (a pause must not send them to the back, and their
+        ``.part`` is taking space); then first queued, first downloaded.
+        """
+        skip = set(exclude)
+        rows = self.query(
+            "SELECT m.source_id, m.msg_id, m.file_name, m.size, m.bytes_done, s.chat_id, s.title AS source_title "
+            "FROM messages m JOIN sources s ON s.id=m.source_id WHERE m.state=? AND m.deleted=0 "
+            "ORDER BY m.bytes_done > 0 DESC, m.updated_at, m.source_id, m.msg_id LIMIT ?", (QUEUED, limit + len(skip)))
+        return [dict(r) for r in rows if (r["source_id"], r["msg_id"]) not in skip][:limit]
+
+    def queue_stats(self) -> dict[str, int]:
+        row = self.query("SELECT COUNT(*), COALESCE(SUM(size), 0), COALESCE(SUM(bytes_done), 0) FROM messages "
+                         "WHERE state=? AND deleted=0", (QUEUED,))[0]
+        return {"queued": row[0], "queued_bytes": row[1], "queued_done": row[2]}
+
+    def requeue_interrupted(self) -> int:
+        """At start-up: files that were downloading when the app stopped go back to the queue (and resume)."""
+        return self.execute("UPDATE messages SET state=? WHERE state=?", (QUEUED, DOWNLOADING))
+
+    def start_download(self, source_id: int, msg_id: int) -> bool:
+        """queued -> downloading (False if it is not queued any more)."""
+        return self.set_state(source_id, [msg_id], DOWNLOADING, only_from=(QUEUED,)) > 0
+
+    def set_progress(self, source_id: int, msg_id: int, bytes_done: int) -> None:
+        self.execute("UPDATE messages SET bytes_done=? WHERE source_id=? AND msg_id=?",
+                     (bytes_done, source_id, msg_id))
+
+    def finish_download(self, source_id: int, msg_id: int, local_path: str) -> bool:
+        return self.mark_downloaded(source_id, msg_id, local_path, only_from=(DOWNLOADING,))
+
+    def local_paths(self, source_id: int) -> set[str]:
+        return {r[0] for r in self.query("SELECT local_path FROM messages WHERE source_id=? AND local_path IS NOT NULL",
+                                         (source_id,))}
+
 
 def open_database(data_dir: Path | str) -> Database:
     return Database(Path(data_dir) / DB_FILE)

@@ -30,6 +30,9 @@
       <button type="button" class="nav-btn" data-view="sources">Fonts
         <span id="sources-badge" class="badge" hidden aria-label="fonts indexant-se">0</span>
       </button>
+      <button type="button" class="nav-btn" data-view="downloads">Baixades
+        <span id="downloads-badge" class="badge" hidden aria-label="fitxers baixant-se">0</span>
+      </button>
       <button type="button" class="nav-btn" data-view="settings">Configuració</button>
     </nav>
 
@@ -83,6 +86,17 @@
         </div>
       </div>
       <div id="sources-content"></div>
+    </section>
+
+    <!-- ============ DOWNLOADS ============ -->
+    <section id="view-downloads" class="view" hidden aria-labelledby="downloads-title">
+      <div class="view-header">
+        <div>
+          <h1 id="downloads-title">Baixades</h1>
+          <p class="muted">Cada fitxer es baixa a blocs i es repren on s'havia quedat (també després d'un tall de llum). Si una connexió s'encalla, es torna a demanar sola.</p>
+        </div>
+      </div>
+      <div id="downloads-content" aria-live="polite"></div>
     </section>
 
     <!-- ============ SETTINGS ============ -->
