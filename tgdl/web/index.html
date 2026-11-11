@@ -190,6 +190,26 @@
             <input id="set-api-key" type="text" readonly spellcheck="false" class="mono">
             <button type="button" id="set-copy-key" class="btn">Copiar</button>
           </div>
+          <details class="arr-help">
+            <summary>Com connectar Sonarr (i Radarr)</summary>
+            <p class="help">A Sonarr, <strong>Settings → Indexers → + → Newznab → Custom</strong>:</p>
+            <table class="kv-table">
+              <tr><th>URL</th><td><code>http://telegram-downloader:8766/arr/newznab</code></td></tr>
+              <tr><th>API Path</th><td><code>/api</code></td></tr>
+              <tr><th>API Key</th><td>la clau d'aquí dalt</td></tr>
+              <tr><th>Categories</th><td><code>5030,5040</code></td></tr>
+            </table>
+            <p class="help"><strong>Settings → Download Clients → + → SABnzbd</strong>:</p>
+            <table class="kv-table">
+              <tr><th>Host</th><td><code>telegram-downloader</code></td></tr>
+              <tr><th>Port</th><td><code>8766</code></td></tr>
+              <tr><th>URL Base</th><td><code>sabnzbd</code></td></tr>
+              <tr><th>API Key</th><td>la clau d'aquí dalt</td></tr>
+              <tr><th>Category</th><td><code>tv</code></td></tr>
+            </table>
+            <p class="help">Sonarr troba les fonts pel seu <strong>id de TheTVDB</strong> (Opcions de la font). Les
+              pel·lícules (Radarr) encara no: els fitxers de Telegram no diuen quina pel·lícula de TMDB són.</p>
+          </details>
         </fieldset>
 
         <div class="settings-actions">

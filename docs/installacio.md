@@ -190,6 +190,26 @@ Detectiu Conan (1996) [tvdbid-72454]/Season 26/Detectiu Conan - S26E01 - 0887.mp
 - El títol del `.nfo` és provisional (el del nom del fitxer o el de TheTVDB, en anglès); els títols en
   català arribaran amb la fase 6.
 
+## 9. Sonarr
+
+Telegram Downloader es presenta a Sonarr com un **indexador Newznab** i un **client SABnzbd** (com 3Cat
+Downloader). Cal l'id de TheTVDB a les fonts i la clau de l'API (Configuració).
+
+**Settings → Download Clients → + → SABnzbd**: Host `telegram-downloader`, Port `8766`, URL Base `sabnzbd`,
+API Key, Category `tv`.
+
+**Settings → Indexers → + → Newznab → Custom**: URL `http://telegram-downloader:8766/arr/newznab`, API Path
+`/api`, API Key, Categories `5030,5040` i, a *Show Advanced*, **Download Client: Telegram Downloader**.
+
+Si tens un altre client SABnzbd (3Cat Downloader), lliga també el seu indexador al seu client: si no,
+Sonarr els alterna i un episodi del 3Cat aniria a parar a Telegram Downloader (o al revés).
+
+- Els episodis que ja són a la biblioteca **no s'ofereixen mai**: Sonarr no els tornarà a baixar com a
+  «millora» encara que els tingui com a SDTV.
+- Per a l'anime (numeració scene de TheXEM), els episodis es busquen i s'anomenen pel número absolut.
+- Una font amb episodis que gestiona Sonarr ha de tenir el destí «A través de Sonarr / Radarr»: amb
+  «Directament a la biblioteca» hi hauria dos camins per al mateix episodi.
+
 ## Problemes habituals
 
 | Què veus | Per què | Què fer |
@@ -207,3 +227,5 @@ Detectiu Conan (1996) [tvdbid-72454]/Season 26/Detectiu Conan - S26E01 - 0887.mp
 | «El missatge ja no existeix» | L'han esborrat del canal | **Reindexa sencer** el marca com a esborrat |
 | «Ja hi ha un fitxer diferent a la biblioteca» | L'episodi ja hi és (una altra versió) | Esborra'n un dels dos i torna a **Col·loca a la biblioteca** |
 | «No se sap la temporada de l'episodi» | Falta l'id de TheTVDB a la font | Posa'l a **Opcions de la font** |
+| Sonarr no deixa desar l'indexador | La prova no arriba a Telegram Downloader | Comprova el host, el port i la clau; mira `Newznab` als registres |
+| Un episodi del 3Cat surt com a error a Telegram Downloader | Els indexadors no estan lligats al seu client | *Show Advanced* → **Download Client** a cada indexador |

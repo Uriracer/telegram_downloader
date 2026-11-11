@@ -18,6 +18,10 @@ file is reported, not replaced. The ``.nfo`` title is the one in the file name
 (``DC-1035 (Escac i mat)``) or TheTVDB's; it carries ``<!-- tgdl -->`` so the
 Catalan titles of phase 6 can replace it.
 
+Releases asked for by Sonarr/Radarr (:mod:`tgdl.sabnzbd`) are *delivered*
+instead: extracted into ``<download dir>/<category>/<release>/`` for them to
+import, and the library placement leaves them alone.
+
 One release at a time, in a worker thread (7-Zip and NFS are the bottleneck).
 """
 from __future__ import annotations
@@ -36,7 +40,7 @@ from xml.sax.saxutils import escape
 
 from . import review, storage
 from .config import atomic_write_bytes
-from .db import DOWNLOADED, EXTRACTING, Database
+from .db import DOWNLOADED, EXTRACTED, EXTRACTING, Database
 from .downloads import safe_name
 from .naming import ABSOLUTE, VIDEO_EXTS
 
@@ -146,7 +150,7 @@ def extract(first_volume: Path, out_dir: Path, seven_zip: Optional[str]) -> None
                 raise PlacementError("L'arxiu té contrasenya.")
             raise PlacementError(f"7-Zip no ha pogut descomprimir l'arxiu ({proc.returncode}): {detail}")
         return
-    if first_volume.suffix.lower() == ".zip":      # without 7-Zip (tests, Windows without it): plain ZIP only
+    if zipfile.is_zipfile(first_volume):          # without 7-Zip (tests, Windows without it): plain ZIP only
         root = out_dir.resolve()
         with zipfile.ZipFile(first_volume) as zf:
             for member in zf.infolist():
@@ -242,6 +246,8 @@ class Placer:
         self._runs: dict[int, Run] = {}
         self._last: dict[int, Run] = {}                   # source id -> last finished run
         self._pending: dict[int, Optional[int]] = {}      # source id -> limit
+        self._deliveries: list[str] = []                  # Sonarr/Radarr jobs (nzo ids) to extract
+        self._delivering = False
         self._thread: Optional[threading.Thread] = None
 
     # ------------------------------------------------------------------ control (any thread)
@@ -257,8 +263,21 @@ class Placer:
 
     def busy(self, source_id: Optional[int] = None) -> bool:
         with self._lock:
-            return bool(self._runs or self._pending) if source_id is None else (
-                source_id in self._runs or source_id in self._pending)
+            if source_id is None:
+                return bool(self._runs or self._pending or self._deliveries or self._delivering)
+            return source_id in self._runs or source_id in self._pending
+
+    def deliver(self, nzo_id: str) -> None:
+        """Extract the release of this Sonarr/Radarr job for them to import, in the background."""
+        with self._lock:
+            if nzo_id not in self._deliveries:
+                self._deliveries.append(nzo_id)
+            self._ensure_thread()
+
+    def _ensure_thread(self) -> None:   # with the lock held
+        if self._thread is None or not self._thread.is_alive():
+            self._thread = threading.Thread(target=self._work, name="placement", daemon=True)
+            self._thread.start()
 
     def place(self, source_id: int, limit: Optional[int] = None) -> bool:
         """Place what is ready in this source, in the background (``limit``: at most that many episodes).
@@ -268,9 +287,7 @@ class Placer:
         with self._lock:
             already = source_id in self._runs or source_id in self._pending
             self._pending[source_id] = limit
-            if self._thread is None or not self._thread.is_alive():
-                self._thread = threading.Thread(target=self._work, name="placement", daemon=True)
-                self._thread.start()
+            self._ensure_thread()
         return not already
 
     def wait(self, timeout: float = 30.0) -> bool:
@@ -285,6 +302,19 @@ class Placer:
     # ------------------------------------------------------------------ worker thread
     def _work(self) -> None:
         while True:
+            with self._lock:
+                nzo_id = self._deliveries.pop(0) if self._deliveries else None
+                if nzo_id is not None:
+                    self._delivering = True
+            if nzo_id is not None:
+                try:
+                    self._deliver(nzo_id)
+                except Exception:
+                    log.exception("Error preparant el llançament %s per a Sonarr/Radarr", nzo_id)
+                finally:
+                    with self._lock:
+                        self._delivering = False
+                continue
             with self._lock:
                 if not self._pending:
                     self._thread = None
@@ -306,6 +336,24 @@ class Placer:
                     log.info("Biblioteca: %d episodis col·locats, %d amb errors (font %s)",
                              run.done, run.failed, source_id)
 
+    def _deliver(self, nzo_id: str) -> None:
+        job = self.db.arr_job(nzo_id)
+        if job is None or job["status"] != "active":
+            return
+        try:
+            target = deliver_release(self.db, job, self._settings(), self._seven_zip())
+        except storage.StorageUnavailable as exc:
+            log.warning("Sonarr/Radarr: «%s» espera el disc: %s", job["title"], exc)
+            return                          # stays active: tried again after the next download or restart
+        except PlacementError as exc:
+            self.db.set_arr_job(nzo_id, status="failed", error=str(exc), finished_at=time.time())
+            log.warning("Sonarr/Radarr: «%s» no s'ha pogut preparar: %s", job["title"], exc)
+        else:
+            if target is not None:
+                self.db.set_arr_job(nzo_id, status="completed", finished_at=time.time())
+                log.info("Sonarr/Radarr: «%s» a punt per importar (%s)", job["title"], target.parent)
+        self._publish_source(job["source_id"])
+
     def _publish_source(self, source_id: int) -> None:
         if self._payload is None:
             return
@@ -323,7 +371,9 @@ class Placer:
         settings = self._settings()
         show = self._show(src)
         series_dir, problem, _chosen = review.resolve_series_dir(settings, src.options)
-        ready = ready_releases(self.db.all_messages(source_id), src.options.numbering, show)
+        claimed = {mid for sid, mid in self.db.arr_claimed() if sid == source_id}
+        messages = [m for m in self.db.all_messages(source_id) if m["msg_id"] not in claimed]
+        ready = ready_releases(messages, src.options.numbering, show)
         if limit is not None:
             ready = ready[:max(0, limit)]
         run = self._runs[source_id]
@@ -411,6 +461,57 @@ class Placer:
             raise PlacementError(f"Error de disc: {exc}") from exc
         finally:
             shutil.rmtree(work, ignore_errors=True)
+
+
+def deliver_release(db: Database, job: dict[str, Any], settings: Any, seven_zip: Optional[str]) -> Optional[Path]:
+    """Extract a Sonarr/Radarr release into its job folder; None if its files are not all downloaded yet.
+
+    The video is named after the release (what Sonarr/Radarr parse). Raises :class:`PlacementError`.
+    """
+    msgs = [db.message(job["source_id"], mid) for mid in job["msg_ids"]]
+    if any(m is None or m["deleted"] for m in msgs):
+        raise PlacementError("Algun fitxer d'aquest llançament ja no és a Telegram.")
+    found = [m for m in msgs if m is not None]
+    if not all(m["state"] in (DOWNLOADED, EXTRACTING) for m in found):
+        return None
+    ids = [m["msg_id"] for m in found]
+    storage.require_storage(settings)
+    folder = Path(job["folder"])
+    work = Path(settings.effective_temp_dir) / WORK_DIR / f"arr-{job['nzo_id'][-12:]}"
+    db.set_state(job["source_id"], ids, EXTRACTING, only_from=(DOWNLOADED,))
+    try:
+        paths = [Path(m["local_path"] or "") for m in found]
+        missing = [p for p in paths if not p.is_file()]
+        if missing:
+            raise PlacementError(f"Falta el fitxer {missing[0]} (s'ha mogut o esborrat?).")
+        shutil.rmtree(work, ignore_errors=True)
+        first_ext = Path(found[0]["file_name"]).suffix.lower().lstrip(".")
+        if len(paths) == 1 and first_ext in VIDEO_EXTS:
+            video, in_place = paths[0], True
+        else:
+            links = link_volumes([(m["file_name"], p) for m, p in zip(found, paths)], work / "vols")
+            extract(links[0], work / "out", seven_zip)
+            video, in_place = pick_video(work / "out"), False
+        storage.require_storage(settings)
+        target = folder / f"{safe_name(job['title'], 0)}{video.suffix.lower()}"
+        move(video, target)
+        _readable(target)
+        db.set_state(job["source_id"], ids, EXTRACTED, only_from=(EXTRACTING,))
+        if getattr(settings, "delete_archives", True) and not in_place:
+            for p in paths:
+                try:
+                    p.unlink()
+                except OSError as exc:
+                    log.warning("No s'ha pogut esborrar %s: %s", p, exc)
+        return target
+    except (PlacementError, storage.StorageUnavailable):
+        db.set_state(job["source_id"], ids, DOWNLOADED, only_from=(EXTRACTING,))
+        raise
+    except OSError as exc:
+        db.set_state(job["source_id"], ids, DOWNLOADED, only_from=(EXTRACTING,))
+        raise PlacementError(f"Error de disc: {exc}") from exc
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
 
 
 def _readable(path: Path) -> None:
