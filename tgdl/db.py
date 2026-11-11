@@ -89,6 +89,22 @@ MIGRATIONS: list[str] = [
     CREATE INDEX messages_name ON messages(source_id, file_name);
     CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     """,
+    # 2 — releases handed over by Sonarr/Radarr (SABnzbd jobs, see tgdl/sabnzbd.py)
+    """
+    CREATE TABLE arr_jobs (
+        nzo_id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        category TEXT NOT NULL,
+        source_id INTEGER NOT NULL,
+        msg_ids TEXT NOT NULL,
+        folder TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'active',
+        error TEXT,
+        created_at REAL NOT NULL,
+        finished_at REAL
+    );
+    CREATE INDEX arr_jobs_status ON arr_jobs(status);
+    """,
 ]
 
 
@@ -346,7 +362,7 @@ class Database:
 
     def all_messages(self, source_id: int) -> list[dict[str, Any]]:
         """Every live message of a source (for the check), oldest first."""
-        rows = self.query("SELECT msg_id, file_name, size, kind, state, local_path, grouped_id FROM messages "
+        rows = self.query("SELECT msg_id, date, file_name, size, kind, state, local_path, grouped_id FROM messages "
                           "WHERE source_id=? AND deleted=0 ORDER BY msg_id", (source_id,))
         return [dict(r) for r in rows]
 
@@ -419,6 +435,10 @@ class Database:
     def finish_download(self, source_id: int, msg_id: int, local_path: str) -> bool:
         return self.mark_downloaded(source_id, msg_id, local_path, only_from=(DOWNLOADING,))
 
+    def reset_extracting(self) -> int:
+        """At start-up: files left half-extracted (the app stopped) are downloaded again, to be retried."""
+        return self.execute("UPDATE messages SET state=? WHERE state=?", (DOWNLOADED, EXTRACTING))
+
     def mark_in_library(self, source_id: int, msg_ids: Iterable[int], local_path: str) -> int:
         """The episode of these messages is in the library at ``local_path`` (every copy of every volume)."""
         allowed = (NEW, QUEUED, DOWNLOADED, EXTRACTING, EXTRACTED, ERROR)
@@ -436,6 +456,41 @@ class Database:
         return {r[0] for r in self.query("SELECT local_path FROM messages WHERE source_id=? AND local_path IS NOT NULL",
                                          (source_id,))}
 
+
+    # ------------------------------------------------------------ Sonarr/Radarr jobs
+    def add_arr_job(self, job: dict[str, Any]) -> None:
+        self.execute("INSERT INTO arr_jobs(nzo_id, title, category, source_id, msg_ids, folder, status, created_at) "
+                     "VALUES(?,?,?,?,?,?,?,?)",
+                     (job["nzo_id"], job["title"], job["category"], job["source_id"], json.dumps(job["msg_ids"]),
+                      job["folder"], job.get("status", "active"), job["created_at"]))
+
+    def arr_jobs(self, status: Optional[str] = None) -> list[dict[str, Any]]:
+        sql, params = "SELECT * FROM arr_jobs", []
+        if status:
+            sql, params = sql + " WHERE status=?", [status]
+        out = []
+        for row in self.query(sql + " ORDER BY created_at", params):
+            job = dict(row)
+            job["msg_ids"] = [int(m) for m in json.loads(job["msg_ids"] or "[]")]
+            out.append(job)
+        return out
+
+    def arr_job(self, nzo_id: str) -> Optional[dict[str, Any]]:
+        return next((j for j in self.arr_jobs() if j["nzo_id"] == nzo_id), None)
+
+    def set_arr_job(self, nzo_id: str, **changes: Any) -> None:
+        allowed = {"status", "error", "finished_at", "folder"}
+        cols = [k for k in changes if k in allowed]
+        if cols:
+            self.execute(f"UPDATE arr_jobs SET {', '.join(f'{c}=?' for c in cols)} WHERE nzo_id=?",
+                         [changes[c] for c in cols] + [nzo_id])
+
+    def delete_arr_job(self, nzo_id: str) -> bool:
+        return self.execute("DELETE FROM arr_jobs WHERE nzo_id=?", (nzo_id,)) > 0
+
+    def arr_claimed(self) -> set[tuple[int, int]]:
+        """Messages of releases Sonarr/Radarr are still waiting for (the library placement leaves them alone)."""
+        return {(j["source_id"], mid) for j in self.arr_jobs("active") for mid in j["msg_ids"]}
 
 def open_database(data_dir: Path | str) -> Database:
     return Database(Path(data_dir) / DB_FILE)

@@ -6,6 +6,9 @@ Blocking work (SQLite, waiting on the Telegram loop) runs in the threadpool
 Downloads (``/api/downloads``, ``/api/sources/{id}/queue``) are run by
 :class:`~tgdl.downloads.DownloadManager` on the Telegram service's loop.
 
+Sonarr/Radarr talk to ``/arr/newznab/api`` (indexer, :mod:`tgdl.arr`) and
+``/sabnzbd/api`` (download client, :mod:`tgdl.sabnzbd`) with the API key.
+
 Telegram errors become HTTP errors with a Catalan ``detail``:
 ``LoginError`` 400, ``NotConfigured``/``NotAuthorized`` 409, ``ChatUnavailable``
 404, ``FloodWait`` 429 (+ ``Retry-After``), other ``TelegramError`` 502.
@@ -14,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import hmac
 import logging
 import os
 import threading
@@ -29,12 +33,13 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import __version__ as APP_VERSION
-from . import files, review, storage
+from . import arr, files, review, storage
 from .auth import COOKIE_NAME, SESSION_SECONDS, AuthManager, password_problem
 from .config import Settings, validation_errors
 from .db import DOWNLOADED, ERROR, IN_LIBRARY, NEW, QUEUED, STATES, Database, SourceOptions
 from .downloads import DownloadManager
 from .placement import Placer
+from .sabnzbd import SAB_VERSION, SabError, SabnzbdService
 from .events import CLOSE, EventBroadcaster, sse
 from .guard import LocalGuardMiddleware
 from .naming import parse as parse_name
@@ -568,13 +573,162 @@ def create_app(settings_store: Optional[SettingsStore] = None, *, db: Database, 
     app.state.placer = placer
     tg.payload_extra = lambda source_id: {"placing": placer.status(source_id), "placed": placer.last(source_id)}
 
-    def after_download(source_id: int, _msg_id: int) -> None:
-        """A file finished: sources placed directly get their complete episodes into the library."""
+    sab = SabnzbdService(db, store.get, downloads=dl, placer=placer)
+    app.state.sab = sab
+    indexer = arr.Indexer(db, lambda src: source_show(src)[0])
+    app.state.indexer = indexer
+
+    def after_download(source_id: int, msg_id: int) -> None:
+        """A file finished: Sonarr/Radarr releases are extracted for them; otherwise, sources placed
+        directly get their complete episodes into the library."""
+        claims = sab.claims(source_id, msg_id)
+        for nzo_id in claims:
+            placer.deliver(nzo_id)
+        if claims:
+            return
         src = db.source(source_id)
         if src is not None and src.options.kind == "series" and src.options.mode == "library":
             placer.place(source_id)
 
     dl.after_download = after_download
+    reset = db.reset_extracting()
+    if reset:
+        log.info("%d fitxers mig descomprimits tornen a estar baixats; es tornaran a provar.", reset)
+    sab.resume()
+
+    # ------------------------------------------------------------- Sonarr / Radarr
+    def arr_key_ok(request: Request) -> bool:
+        given = request.query_params.get("apikey") or request.headers.get("x-api-key") or ""
+        expected = str(store.get().api_key or "")
+        return bool(expected) and hmac.compare_digest(given.encode("utf-8"), expected.encode("utf-8"))
+
+    def xml(text: str, status: int = 200) -> Response:
+        return Response(text, status_code=status, media_type="application/xml; charset=utf-8")
+
+    def int_param(value: Optional[str], default: int = 0) -> int:
+        try:
+            return max(0, int(value or default))
+        except ValueError:
+            return default
+
+    @app.get("/arr/newznab/api", include_in_schema=False)
+    @app.get("/arr/newznab/api/", include_in_schema=False)
+    async def newznab(request: Request) -> Response:
+        params = request.query_params
+        if not arr_key_ok(request):
+            return xml(arr.error_xml(100, "Incorrect user credentials"))
+        t = (params.get("t") or "").lower()
+        if t == "caps":
+            return xml(arr.caps_xml())
+        if t not in ("search", "tvsearch", "movie"):
+            return xml(arr.error_xml(202, f"No such function ({t})"))
+        cats = {int(c) for c in (params.get("cat") or "").replace(" ", "").split(",") if c.isdigit()}
+        wants_movies = t == "movie" or (bool(cats) and all(2000 <= c < 3000 for c in cats))
+        q = (params.get("q") or "").strip()
+        tvdb_id = int_param(params.get("tvdbid")) or None
+        offset, limit = int_param(params.get("offset")), int_param(params.get("limit"), 100) or 100
+        try:
+            if wants_movies:
+                found: list[arr.Item] = []          # films: not yet (no TMDB ids in Telegram files)
+            elif not q and not tvdb_id:
+                found = await call(indexer.rss) or [arr.placeholder_item()]   # an empty feed fails Sonarr's test
+            else:
+                found = await call(indexer.tv_search, q, params.get("season"), params.get("ep"), tvdb_id)
+        except Exception as exc:
+            log.warning("Newznab: la cerca ha fallat (%s): %s", q, exc)
+            return xml(arr.error_xml(900, f"Error: {exc}"))
+        log.info("Newznab t=%s q=%r%s season=%s ep=%s -> %d resultats", t, q,
+                 f" tvdbid={tvdb_id}" if tvdb_id else "", params.get("season"), params.get("ep"), len(found))
+        return xml(arr.rss_feed(found[offset:offset + limit], base_url=str(request.base_url),
+                                api_key=str(store.get().api_key), offset=offset, total=len(found)))
+
+    @app.get("/arr/nzb/{token}.nzb", include_in_schema=False)
+    async def nzb_file(token: str, request: Request) -> Response:
+        if not arr_key_ok(request):
+            return xml(arr.error_xml(100, "Incorrect user credentials"), status=401)
+        try:
+            tok = arr.Token.decode(token)
+        except ValueError as exc:
+            return xml(arr.error_xml(300, str(exc)), status=404)
+        filename = f"{tok.title}.nzb".replace('"', "")
+        return Response(arr.build_nzb(tok), media_type="application/x-nzb",
+                        headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+    async def sab_nzb_bytes(mode: str, request: Request) -> bytes:
+        if mode == "addurl":
+            url = request.query_params.get("name") or ""
+            if "/arr/nzb/" not in url:
+                raise SabError("Només s'accepten enllaços de Telegram Downloader.")
+            token = url.split("/arr/nzb/", 1)[1].split(".nzb", 1)[0]
+            try:
+                return arr.build_nzb(arr.Token.decode(token))
+            except ValueError as exc:
+                raise SabError(str(exc)) from exc
+        form = await request.form()
+        upload = form.get("name") or form.get("nzbfile")
+        if upload is None or isinstance(upload, str):
+            raise SabError("No s'ha rebut cap fitxer NZB.")
+        data = await upload.read(1_000_001)
+        if len(data) > 1_000_000:
+            raise SabError("El fitxer NZB és massa gran.")
+        return data
+
+    async def sab_mode(mode: str, request: Request) -> dict[str, Any]:
+        params = request.query_params
+        category = params.get("category") or None
+        start, limit = int_param(params.get("start")), int_param(params.get("limit"))
+        name = (params.get("name") or "").lower()
+        values = [v for v in (params.get("value") or "").split(",") if v]
+        delete_files = params.get("del_files") in ("1", "true", "True")
+        if mode == "get_config":
+            return sab.config()
+        if mode == "fullstatus":
+            return {"status": {"completedir": sab.complete_dir(), "paused": False}}
+        if mode == "queue":
+            if name == "delete":
+                return {"status": await call(sab.delete, values, delete_files), "nzo_ids": values}
+            if name in ("pause", "resume", "priority", "change_cat"):
+                return {"status": True}
+            return await call(sab.queue, category, start, limit)
+        if mode == "history":
+            if name == "delete":
+                return {"status": await call(sab.delete, values, delete_files)}
+            return await call(sab.history, category, start, limit)
+        if mode in ("addfile", "addlocalfile", "addurl"):
+            data = await sab_nzb_bytes(mode, request)
+            try:
+                token = arr.token_from_nzb(data)
+            except ValueError as exc:
+                raise SabError(str(exc)) from exc
+            nzo_id = await call(sab.add, token, params.get("cat"))
+            src = tg.source_payload(token.source_id)
+            if src:
+                events.publish("source", src)
+            return {"status": True, "nzo_ids": [nzo_id]}
+        if mode == "retry":
+            nzo_id = await call(sab.retry, params.get("value") or "")
+            return {"status": nzo_id is not None, "nzo_id": nzo_id}
+        if mode == "warnings":
+            return {"status": True, "warnings": []}
+        if mode in ("pause", "resume", "server_stats", "status", "shutdown", "restart"):
+            return {"status": True}
+        raise SabError(f"Mode no suportat: {mode or '(cap)'}")
+
+    async def sabnzbd(request: Request) -> Response:
+        mode = (request.query_params.get("mode") or "").lower()
+        if mode == "version":   # SABnzbd answers this without a key too
+            return JSONResponse({"version": SAB_VERSION})
+        if not (request.query_params.get("apikey") or request.headers.get("x-api-key")):
+            return JSONResponse({"status": False, "error": "API Key Required"})
+        if not arr_key_ok(request):
+            return JSONResponse({"status": False, "error": "API Key Incorrect"})
+        try:
+            return JSONResponse(await sab_mode(mode, request))
+        except SabError as exc:
+            return JSONResponse({"status": False, "error": str(exc)})
+
+    for sab_path in ("/sabnzbd/api", "/api"):
+        app.add_api_route(sab_path, sabnzbd, methods=["GET", "POST"], include_in_schema=False)
 
     @app.post("/api/sources/{source_id}/place")
     async def source_place(source_id: int, body: Optional[PlaceRequest] = None) -> dict[str, Any]:

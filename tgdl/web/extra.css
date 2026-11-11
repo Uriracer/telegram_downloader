@@ -100,3 +100,10 @@ input[type="number"]:focus, input[type="tel"]:focus { border-color: var(--focus)
 .dl-job .name { overflow-wrap: anywhere; }
 .dl-job[data-status="retrying"] .progress-bar, .dl-job[data-status="waiting"] .progress-bar { background: var(--warn); }
 .dl-job[data-status="starting"] .progress-bar, .dl-job[data-status="finishing"] .progress-bar { opacity: .6; }
+
+/* Sonarr/Radarr connection help */
+.arr-help { margin-top: .75rem; }
+.arr-help summary { cursor: pointer; font-weight: 600; }
+.kv-table { border-collapse: collapse; margin: .25rem 0 .75rem; font-size: .9rem; }
+.kv-table th { text-align: left; font-weight: 600; color: var(--muted); padding: .2rem 1rem .2rem 0; vertical-align: top; }
+.kv-table td { padding: .2rem 0; overflow-wrap: anywhere; }

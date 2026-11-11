@@ -4,6 +4,22 @@ Format basat en [Keep a Changelog](https://keepachangelog.com/ca/1.1.0/); versio
 
 ## [0.1.0] — en desenvolupament
 
+### Fase 5: Sonarr (Radarr encara no)
+- **Indexador Newznab** (`/arr/newznab/api`): Sonarr hi busca per l'id de TheTVDB de les fonts (o pel títol)
+  i rep un llançament per episodi (la millor còpia, tots els volums) amb la mida real i un nom que entén:
+  `Detective.Conan.S26E01.Títol.CATALAN.720p.WEB-DL-TGDL`.
+- **Mai el que ja és a la biblioteca**: Sonarr tenia els fitxers del Conan com a SDTV/HDTV i hauria
+  «millorat» ~850 episodis tornant a baixar els mateixos fitxers.
+- **Numeració scene** (TheXEM): Sonarr busca el Conan com a `season=1&ep=887`; l'episodi amb aquest número
+  absolut es retorna anomenat `S01E887`.
+- **Client SABnzbd** (`/sabnzbd/api`): el llançament triat es baixa, es descomprimeix a
+  `<baixades>/tv/<llançament>/` i Sonarr l'importa; després l'esborra i els fitxers queden «A la biblioteca».
+  Les feines es desen a la base de dades (migració 2) i es reprenen després d'un reinici. La col·locació
+  directa de la fase 4 no toca els episodis que ha demanat Sonarr.
+- Quan no hi ha res a oferir, la llista de novetats porta un element de mostra d'una sèrie inexistent: si és
+  buida, Sonarr no deixa desar l'indexador.
+- Configuració: com connectar Sonarr. Dependència nova: `python-multipart` (els NZB que envia Sonarr).
+
 ### Fase 4: biblioteca (sèries)
 - **Col·locació a la biblioteca**: cada episodi baixat (tots els volums d'un arxiu, o un vídeo sol) es
   descomprimeix amb `7zz` i el vídeo va a `<sèrie>/Season N/<Sèrie> - S26E01 - 0887.mp4` (número absolut

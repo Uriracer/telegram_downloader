@@ -18,6 +18,7 @@ dependencies = [
     "telethon>=1.40,<2",
     "cryptg>=0.4",
     "segno>=1.6",
+    "python-multipart>=0.0.9",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",

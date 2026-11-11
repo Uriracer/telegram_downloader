@@ -19,7 +19,7 @@ reprenien, fitxers que es tornaven a baixar i un NAS que de vegades no estava mu
 | 2 | ✅ | Reconeixement de noms de capítols, mode de comprovació (què falta, repetits, CRC amb «DC»…), TheTVDB |
 | 3 | ✅ | Baixada robusta: represa per blocs, *watchdog*, paral·lelisme, Premium, velocitat i temps restant |
 | 4 | ✅ | Descompressió (RAR5, multipart, ZIP, 7z) i col·locació de sèries a la biblioteca amb `.nfo` |
-| 5 | ⏳ | Sonarr i Radarr (indexador Newznab + client SABnzbd) i prova amb Sonarr i Radarr reals |
+| 5 | ◐ | Sonarr ✅ (indexador Newznab + client SABnzbd, provat amb el Sonarr real); Radarr ⏳ (pel·lícules) |
 | 6 | ⏳ | Títols en català (Viquipèdia) i verificació per títols |
 
 ## Inici ràpid (Docker Compose)

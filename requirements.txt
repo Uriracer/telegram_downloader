@@ -5,3 +5,4 @@ httpx>=0.27
 telethon>=1.40,<2
 cryptg>=0.4          # AES in C: without it Telethon downloads are many times slower
 segno>=1.6           # QR code for the login (pure Python)
+python-multipart>=0.0.9   # NZB uploads from Sonarr/Radarr (SABnzbd API)
