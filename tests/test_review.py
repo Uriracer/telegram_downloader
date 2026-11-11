@@ -136,3 +136,22 @@ def test_library_names_without_sxxeyy(tmp_path: Path, show: Any) -> None:
     t2.mkdir(parents=True)
     (t2 / "05 - Títol.mkv").write_bytes(b"x")
     assert set(scan_library(tmp_path / "Hawaii", None, "seasons")) == {"S2E5"}
+
+
+def test_wanted_picks_one_copy_of_each_missing_episode() -> None:
+    from tgdl.review import wanted
+
+    messages = [
+        msg(1, "DC-928 (El vermell de l'amor) [70BF1E30].part1.rar"),
+        msg(2, "DC-928 (El vermell de l'amor) [70BF1E30].part2.rar"),
+        msg(3, "DC-928 (El vermell de l'amor) [70BF1E30].part2.rar"),      # volume 2 uploaded twice
+        msg(4, "DC-1004 (Nus) [5A052F3A].rar"),                              # already in the library
+        msg(5, "DC-930 (Sense principi) [0BADF00D].part2.rar"),              # volume 1 missing
+        msg(6, "foto_de_grup.rar"),                                          # no episode number
+        msg(7, "DC-931 (Ja baixat) [CAFEBABE].rar", state="downloaded"),
+        {**msg(8, "portada.jpg"), "kind": "photo"},
+    ]
+    res = wanted(messages, numbering="absolute", library={"A1004": "/data/Conan/1004.mkv"})
+    assert res == {"msg_ids": [1, 3], "skipped_unrecognized": 1, "skipped_incomplete": 1, "in_library": 1}
+    # Movies and other content: every file but photos.
+    assert wanted(messages, numbering="absolute", kind="movies")["msg_ids"] == [1, 2, 3, 4, 5, 6, 7]

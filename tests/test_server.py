@@ -225,3 +225,27 @@ def test_check_import_and_reconcile(tmp_path: Path) -> None:
         assert c.get("/api/tvdb/1").status_code == 404
     finally:
         e.close()
+
+
+def test_queue_missing_unqueue_and_pause(env: Env) -> None:
+    c = env.client
+    login_telegram(env)
+    src = c.post("/api/sources", json={"chat_id": CONAN_CHAT}, headers=ORIGIN).json()
+    wait_for(lambda: c.get(f"/api/sources/{src['id']}").json()["indexing"] is None
+             and c.get(f"/api/sources/{src['id']}").json()["files"] == 7)
+    url = f"/api/sources/{src['id']}"
+    assert c.post(f"{url}/queue", json={}, headers=ORIGIN).status_code == 422
+
+    # Every recognised, complete episode (the two volumes of DC-928 together); never the poster.
+    res = c.post(f"{url}/queue", json={"missing": True}, headers=ORIGIN).json()
+    assert res["queued"] == 7 and res["source"]["counts"] == {"queued": 7}
+    assert c.post(f"{url}/queue", json={"missing": True}, headers=ORIGIN).json()["queued"] == 0   # already
+
+    assert c.post(f"{url}/unqueue", json={"msg_ids": [7, 8]}, headers=ORIGIN).json()["unqueued"] == 2
+    status = c.get("/api/downloads").json()
+    assert status["queued"] == 5 and status["queued_bytes"] == 5 * 500_000_000 and status["active"] == []
+    assert c.post(f"{url}/queue", json={"msg_ids": [7]}, headers=ORIGIN).json()["queued"] == 1
+
+    assert c.post("/api/downloads/pause", headers=ORIGIN).json()["paused"] is True
+    assert env.harness.db.get_value("downloads_paused") is True
+    assert c.post("/api/downloads/resume", headers=ORIGIN).json()["paused"] is False

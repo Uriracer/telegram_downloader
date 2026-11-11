@@ -151,6 +151,25 @@ Al tauler **Revisió abans de baixar**:
    és `/data/_conan/zips`). Primer et diu què farà; els fitxers no es mouen. Els que tenen una mida diferent
    de la de Telegram es tornaran a baixar.
 
+## 7. Baixar
+
+- **Baixa el que falta** (a la font): posa a la cua la millor còpia de cada episodi que no és a la
+  biblioteca: la versió més alta i completa, i un sol cop cada volum penjat dues vegades. Els arxius
+  sense número o als quals falta algun volum no s'hi posen (et diu quants n'hi ha); els pots baixar d'un
+  en un amb **Baixa** a la llista de **Fitxers**. Per a pel·lícules i altres continguts s'hi posa tot.
+- La pestanya **Baixades** mostra els fitxers que s'estan baixant, la velocitat i el temps que queda.
+  **Pausa** els atura tots (el que ja s'ha baixat es guarda) i **Treu de la cua** en treu un.
+- Es baixen **Fitxers alhora** fitxers a la vegada, cadascun amb **Connexions per fitxer** connexions
+  (Configuració). Sense Telegram Premium, més connexions ajuden poc: Telegram limita la velocitat.
+- Els fitxers baixats queden a la carpeta temporal (`<baixades>/.tmp/src-<font>/`, al NAS) amb el nom
+  original, tots els volums d'un arxiu junts, a punt per descomprimir.
+
+Cada fitxer es baixa a blocs de 512 KB i, al costat del fitxer a mitges (`.N.part`), un `.N.part.json`
+diu quins blocs ja hi són: després d'aturar el contenidor o d'un tall de llum es continua on s'havia
+quedat. Si Telegram no respon en **Reconnecta si un fitxer no avança en** segons, es torna a demanar el
+bloc; després de 8 intents seguits, el fitxer passa a «Error» amb el motiu i la cua continua. Si el NAS
+desapareix a mitja baixada, s'atura tot i es reprèn sol quan torna.
+
 ## Problemes habituals
 
 | Què veus | Per què | Què fer |
@@ -163,3 +182,6 @@ Al tauler **Revisió abans de baixar**:
 | La revisió diu «No hi ha cap carpeta amb [tvdbid-…]» | La carpeta de la sèrie no porta l'id | Posa-li `[tvdbid-N]` al nom, com espera Jellyfin |
 | Molts fitxers «sense número» | Un format de nom nou | Envia'n uns quants exemples: s'afegirà |
 | «ja s'està executant amb aquesta carpeta de dades» | Dos contenidors amb el mateix `/config` | Atura'n un: compartirien la sessió de Telegram |
+| «Queda menys d'1 GB lliure al disc» | El disc de les baixades és ple | Allibera espai: les baixades continuen soles |
+| Un fitxer en «Error» amb «Telegram no ha respost…» | Connexió dolenta durant una estona | **Torna-ho a provar** a la llista de fitxers: continua on era |
+| «El missatge ja no existeix» | L'han esborrat del canal | **Reindexa sencer** el marca com a esborrat |

@@ -91,6 +91,22 @@ class ChatUnavailable(TelegramError):
     """The chat does not exist any more, or the account has no access to it."""
 
 
+class FileGone(TelegramError):
+    """The message was deleted, or it no longer has a file."""
+
+    def __init__(self, message: str = "El missatge ja no existeix o ja no té cap fitxer.") -> None:
+        super().__init__(message)
+
+
+@dataclass
+class RemoteFile:
+    """A file that can be read in blocks; ``handle`` is gateway-specific (Telethon: the message media)."""
+    chat_id: int
+    msg_id: int
+    size: int
+    handle: Any = None
+
+
 # --------------------------------------------------------------------------- protocol
 
 class Gateway(Protocol):
@@ -112,6 +128,15 @@ class Gateway(Protocol):
     async def dialogs(self) -> list[Dialog]: ...
     def iter_files(self, chat_id: int, min_id: int = 0) -> AsyncIterator[IndexedMessage]:
         """Messages with a file (document, video, audio, photo), oldest first, ``msg_id > min_id``."""
+
+    # downloads
+    async def remote_file(self, chat_id: int, msg_id: int) -> RemoteFile:
+        """The file of a message (fresh file reference); :class:`FileGone` if it is not there any more."""
+    async def read_block(self, remote: RemoteFile, offset: int, limit: int) -> bytes:
+        """``limit`` bytes from ``offset`` (fewer at the end of the file).
+
+        ``offset`` is a multiple of ``limit`` and ``limit`` divides 1 MiB (MTProto's rules for upload.getFile).
+        """
 
 
 def message_kind(mime: str, is_photo: bool = False) -> str:

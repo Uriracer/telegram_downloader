@@ -106,3 +106,17 @@ def test_tvdb_and_numbering_options() -> None:
     o = SourceOptions.from_dict({"tvdb_id": "abc", "numbering": "x"})
     assert (o.tvdb_id, o.numbering) == (0, "seasons")
     assert SourceOptions.from_dict({"tvdb_id": True}).tvdb_id == 0
+
+
+def test_next_queued_starts_with_files_already_begun(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    from tgdl.db import QUEUED, Database, IndexedMessage
+
+    db = Database(tmp_path / "q.db")
+    src = db.add_source(-100, "Canal")
+    db.upsert_messages(src.id, [IndexedMessage(i, None, "", f"{i}.rar", 1000) for i in (1, 2, 3)])
+    db.set_state(src.id, [1, 2, 3], QUEUED)
+    db.set_progress(src.id, 3, 500)
+    assert [m["msg_id"] for m in db.next_queued(3)] == [3, 1, 2]
+    assert [m["msg_id"] for m in db.next_queued(1, exclude=[(src.id, 3)])] == [1]
+    assert db.queue_stats() == {"queued": 3, "queued_bytes": 3000, "queued_done": 500}
+    db.close()

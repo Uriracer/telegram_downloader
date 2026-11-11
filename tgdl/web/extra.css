@@ -93,3 +93,10 @@ input[type="number"]:focus, input[type="tel"]:focus { border-color: var(--focus)
   padding: .45rem .75rem; cursor: pointer; font: inherit; overflow-wrap: anywhere; }
 .picker-dir:hover, .picker-dir:focus-visible { background: var(--accent-soft); }
 .dialog .picker-info { margin: .25rem 0 1rem; }
+
+/* Downloads */
+.dl-jobs { list-style: none; margin: 1rem 0 0; padding: 0; display: flex; flex-direction: column; gap: .75rem; }
+.dl-job { display: flex; flex-direction: column; gap: .5rem; padding: 14px 18px; }
+.dl-job .name { overflow-wrap: anywhere; }
+.dl-job[data-status="retrying"] .progress-bar, .dl-job[data-status="waiting"] .progress-bar { background: var(--warn); }
+.dl-job[data-status="starting"] .progress-bar, .dl-job[data-status="finishing"] .progress-bar { opacity: .6; }
