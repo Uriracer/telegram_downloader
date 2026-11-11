@@ -217,3 +217,87 @@ def test_empty_feed_has_a_placeholder_sonarr_never_grabs(ae: ArrEnv) -> None:
     res = ae.c.post("/sabnzbd/api", params={"apikey": ae.key, "mode": "addfile", "cat": "tv"},
                     files={"name": ("x.nzb", nzb, "application/x-nzb")}).json()
     assert res["status"] is False and "no existeix" in res["error"]
+
+
+# --------------------------------------------------------------------------- Radarr
+
+MOVIES_CHAT = -1003333333333
+TMDB_FIXTURE = Path(__file__).parent / "fixtures" / "tmdb-collection-39199.json"
+
+
+def tmdb_transport() -> Any:
+    import httpx
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/collection/39199"):
+            return httpx.Response(200, content=TMDB_FIXTURE.read_bytes(), headers={"content-type": "application/json"})
+        return httpx.Response(404, json={})
+
+    return httpx.MockTransport(handler)
+
+
+@pytest.fixture
+def films(ae: ArrEnv) -> ArrEnv:
+    from tgdl.telegram.fake import FakeGateway
+    from tgdl.telegram.gateway import Dialog
+
+    ae.env.harness.gateway.add_dialog(Dialog(MOVIES_CHAT, "El Detectiu Conan - Pel·lícules en català", "channel"), [
+        FakeGateway.file(4, "Animelliure_DC_Movie_01_v2_Multi_Audio_1080p_81FB8097_part1.rar", size=1000),
+        FakeGateway.file(5, "Animelliure_DC_Movie_01_v2_Multi_Audio_1080p_81FB8097_part2.rar", size=500),
+        FakeGateway.file(120, "DC-Movie 22 [C7FE7101].part4.rar", size=10),
+        FakeGateway.file(121, "DC-Movie 22 [C7FE7101].part1.rar", size=100),
+        FakeGateway.file(122, "DC-Movie 22 [C7FE7101].part2.rar", size=100),
+        FakeGateway.file(123, "DC-Movie 22 [C7FE7101].part3.rar", size=100),
+        FakeGateway.file(176, "DC-Movie 28 [1080p] [E0CE99F7].part1.rar", size=300),
+        FakeGateway.file(180, "poster.jpg", size=5),
+    ])
+    ae.env.app.state.tmdb._transport = tmdb_transport()
+    src = ae.c.post("/api/sources", json={"chat_id": MOVIES_CHAT, "options": {"kind": "movies", "tmdb_collection": 39199}},
+                    headers=ORIGIN).json()
+    ae.mid = src["id"]                                              # type: ignore[attr-defined]
+    wait_for(lambda: ae.c.get(f"/api/sources/{src['id']}").json()["files"] == 7)
+    return ae
+
+
+def test_films_by_tmdb_imdb_and_title(films: ArrEnv) -> None:
+    feed = films.items(t="movie", cat="2030,2040")                 # Radarr's RSS sync
+    by_tmdb = {i["tmdbid"]: i for i in feed}
+    assert set(by_tmdb) == {"21422", "493006", "1396965"}          # films 1, 22 and 28 of the collection
+    zero = by_tmdb["493006"]
+    assert zero["title"] == "Case.Closed.Zero.the.Enforcer.2018.CATALAN.720p.WEB-DL-TGDL"
+    assert zero["size"] == "310" and zero["imdb"] == "7880466" and zero["category"] == "2040"
+    assert by_tmdb["21422"]["title"].endswith(".1997.CATALAN.1080p.WEB-DL-TGDL")
+    assert [i["tmdbid"] for i in films.items(t="movie", tmdbid=493006)] == ["493006"]
+    assert [i["tmdbid"] for i in films.items(t="movie", imdbid="tt7880466")] == ["493006"]
+    assert [i["tmdbid"] for i in films.items(t="movie", q="Case Closed Zero the Enforcer 2018")] == ["493006"]
+    assert films.items(t="movie", tmdbid=12345) == []
+    assert films.items(t="tvsearch", tvdbid=72454) and all("tmdbid" not in i for i in films.items(t="tvsearch"))
+
+
+def test_film_cycle_and_library(films: ArrEnv) -> None:
+    zero = films.items(t="movie", tmdbid=493006)[0]
+    token = arr.Token.decode(zero["link"].split("/arr/nzb/", 1)[1].split(".nzb", 1)[0])
+    assert token.msg_ids == [121, 122, 123, 120] and token.category == "movies"     # volumes in order
+    nzo = films.add(zero, category="movies")
+    assert films.sab(mode="queue", category="movies")["queue"]["noofslots"] == 1
+    assert films.sab(mode="queue", category="tv")["queue"]["noofslots"] == 0
+    films.sab(mode="queue", name="delete", value=nzo)
+    films.db.mark_in_library(films.mid, [121, 122, 123, 120], "/data/Pelicules/x")   # type: ignore[attr-defined]
+    assert films.items(t="movie", tmdbid=493006) == []              # already in the library: never again
+
+
+def test_empty_film_feed_has_a_placeholder(films: ArrEnv) -> None:
+    films.db.mark_in_library(films.mid, [4, 5, 120, 121, 122, 123, 176], "/x")      # type: ignore[attr-defined]
+    feed = films.items(t="movie", cat="2030,2040")
+    assert len(feed) == 1 and feed[0]["category"] == "2040" and feed[0]["title"].startswith("Telegram.Downloader.Feed.1900.")
+
+
+def test_tmdb_collection_order() -> None:
+    import json
+
+    from tgdl.tmdb import parse_collection
+
+    col = parse_collection(39199, json.loads(TMDB_FIXTURE.read_text(encoding="utf-8")))
+    assert len(col.films) == 29 and col.film(1).year == 1997 and col.film(22).tmdb_id == 493006   # type: ignore[union-attr]
+    assert col.film(22).titles["ca"] == "El detectiu Conan: El cas Zero"                     # type: ignore[union-attr]
+    assert col.film(30) is None and col.number_of(493006) == 22

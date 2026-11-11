@@ -8,15 +8,18 @@ WEB-DL-TGDL``) and with the real size. Each release links to a pseudo-NZB
 which source to download. Sonarr hands it to our SABnzbd API (:mod:`tgdl.sabnzbd`).
 
 Sources are found by the TheTVDB id Sonarr sends (``tvdbid``), which is the id
-in the source options, or by the series title. Episodes that are already in the
-library are **never offered**: Sonarr would otherwise "upgrade" them (an SDTV
-file → our WEB-DL name) by downloading the very same file again.
+in the source options, or by the series title. Films (Radarr) come from sources
+of kind «movies» with a TMDB collection (:mod:`tgdl.tmdb`): ``DC-Movie 22`` is
+the 22nd film of the collection, searched by its TMDB or IMDb id.
+
+Episodes and films that are already in the library are **never offered**:
+Sonarr/Radarr would otherwise "upgrade" them (an SDTV file → our WEB-DL name)
+by downloading the very same file again.
 
 **Scene numbering.** For anime like Detective Conan, Sonarr searches with the
 scene numbers of TheXEM (``season=1&ep=887`` for TheTVDB's S26E01). An episode
 whose absolute number is the ``ep`` asked for is returned named with the
-numbers Sonarr asked (``S01E887``), so it maps it back to the right episode. Movies (Radarr) are not offered
-yet: the Telegram files do not say which TMDB film they are.
+numbers Sonarr asked (``S01E887``), so it maps it back to the right episode.
 
 Same formats as 3Cat Downloader's integration, which works with Sonarr 4 and
 Radarr 6.
@@ -173,6 +176,8 @@ class Item:
     season: Optional[int] = None
     episode: Optional[int] = None
     tvdb_id: Optional[int] = None
+    tmdb_id: Optional[int] = None
+    imdb_id: str = ""                     # "tt0131479"
     absolute: Optional[int] = None
     language: str = ""
     description: str = ""
@@ -201,6 +206,10 @@ def rss_feed(items: list[Item], *, base_url: str, api_key: str, offset: int = 0,
             attrs.append(("episode", str(it.episode)))
         if it.tvdb_id:
             attrs.append(("tvdbid", str(it.tvdb_id)))
+        if it.tmdb_id:
+            attrs.append(("tmdbid", str(it.tmdb_id)))
+        if it.imdb_id.lower().removeprefix("tt").isdigit():
+            attrs.append(("imdb", it.imdb_id.lower().removeprefix("tt")))     # Radarr reads digits only
         if it.language:
             attrs.append(("language", it.language))
         attr_xml = "".join(f'<newznab:attr name="{n}" value="{escape(v)}"/>' for n, v in attrs)
@@ -231,7 +240,7 @@ def caps_xml() -> str:
             "<searching>"
             '<search available="yes" supportedParams="q"/>'
             '<tv-search available="yes" supportedParams="q,season,ep,tvdbid"/>'
-            '<movie-search available="no" supportedParams="q"/>'
+            '<movie-search available="yes" supportedParams="q,imdbid,tmdbid"/>'
             "</searching><categories>"
             f'<category id="{CAT_MOVIES}" name="Movies"><subcat id="{CAT_MOVIES_SD}" name="SD"/>'
             f'<subcat id="{CAT_MOVIES_HD}" name="HD"/></category>'
@@ -250,7 +259,19 @@ def error_xml(code: int, description: str) -> str:
 PLACEHOLDER_SERIES = "Telegram Downloader Feed"
 
 
-def placeholder_item() -> Item:
+def movie_release_name(title: str, year: int, language: str, res: str) -> str:
+    """``Case.Closed.Zero.the.Enforcer.2018.CATALAN.1080p.WEB-DL-TGDL``."""
+    parts = [dotted(title) or "Telegram"]
+    if year:
+        parts.append(str(year))
+    tag = LANGUAGES.get(language, ("", ""))[1]
+    if tag:
+        parts.append(tag)
+    parts += [res, f"WEB-DL-{GROUP}"]
+    return ".".join(parts)
+
+
+def placeholder_item(movies: bool = False) -> Item:
     """What the feed holds when there is nothing to offer.
 
     Sonarr/Radarr refuse to save an indexer whose feed is empty ("no results in the configured
@@ -258,6 +279,11 @@ def placeholder_item() -> Item:
     release belongs to no real series: Sonarr's RSS sync skips it as an unknown series, and the
     pseudo-NZB names no messages, so even a manual grab fails harmlessly.
     """
+    if movies:
+        title = movie_release_name(PLACEHOLDER_SERIES, 1900, "", "720p")
+        return Item(title=title, token=Token(0, [0], title, "movies"), size=1024 ** 2, category=CAT_MOVIES_HD,
+                    published=datetime.now(timezone.utc).isoformat(),
+                    description="Telegram Downloader: no hi ha res de nou", guid="tgdl-placeholder-movies")
     title = episode_release_name(PLACEHOLDER_SERIES, 1, 1, "Nothing new", "", "720p")
     return Item(title=title, token=Token(0, [0], title), size=1024 ** 2, category=CAT_TV_HD,
                 published=datetime.now(timezone.utc).isoformat(), season=1, episode=1,
@@ -278,6 +304,7 @@ def renumbered(item: Item, season: int, episode: int) -> Item:
 class Indexer:
     db: Database
     show_getter: Callable[[Any], Any]                 # source -> tvdb.Show | None
+    collection_getter: Callable[[Any], Any] = lambda src: None   # source -> tmdb.Collection | None
 
     def _series_sources(self) -> list[Any]:
         return [s for s in self.db.sources() if s.options.kind == "series"]
@@ -353,6 +380,63 @@ class Indexer:
             out = exact
         out.sort(key=lambda i: (i.season or 0, i.episode or 0))
         return out
+
+    # -------------------------------------------------------------- films
+    def films(self, src: Any) -> list[Item]:
+        """One release per film of a source of films (the copy to download), named after TMDB."""
+        collection = self.collection_getter(src) if src.options.tmdb_collection else None
+        if collection is None:
+            return []
+        messages = [m for m in self.db.all_messages(src.id) if m.get("kind") != "photo"]
+        releases, _others = review.build_releases(messages, src.options.numbering, None)
+        by_number: dict[int, list[review.Release]] = {}
+        for rel in releases:
+            if rel.parsed.movie is not None:
+                by_number.setdefault(rel.parsed.movie, []).append(rel)
+        language = src.options.language
+        items = []
+        for number, rels in by_number.items():
+            film = collection.film(number)
+            if film is None or any(m["state"] in _DONE for rel in rels for m in rel.messages):
+                continue
+            best = review.best_release(rels)
+            if not best.complete:
+                continue
+            chosen = [max(best.volumes[n], key=lambda m: m["msg_id"]) for n in sorted(best.volumes)]
+            res = resolution([m["file_name"] for m in chosen])
+            name = movie_release_name(film.title, film.year, language, res)
+            items.append(Item(
+                title=name, token=Token(src.id, [m["msg_id"] for m in chosen], name, "movies"),
+                size=sum(int(m["size"] or 0) for m in chosen),
+                category=CAT_MOVIES_HD if res in ("720p", "1080p", "2160p") else CAT_MOVIES_SD,
+                published=max((m.get("date") or "" for m in chosen), default="") or None,
+                tmdb_id=film.tmdb_id, imdb_id=film.imdb_id, language=LANGUAGES.get(language, ("", ""))[0],
+                description=f"{src.title}: {best.name}", guid=f"tgdl-{src.id}-{chosen[0]['msg_id']}"))
+        return items
+
+    def _film_sources(self) -> list[Any]:
+        return [s for s in self.db.sources() if s.options.kind == "movies"]
+
+    def movie_search(self, q: str = "", tmdb_id: Optional[int] = None, imdb_id: Optional[str] = None) -> list[Item]:
+        items = [i for src in self._film_sources() for i in self.films(src)]
+        if tmdb_id or imdb_id:
+            imdb = (imdb_id or "").lower().removeprefix("tt")
+            return [i for i in items if (tmdb_id and i.tmdb_id == tmdb_id)
+                    or (imdb and i.imdb_id.lower().removeprefix("tt") == imdb)]
+        wanted = normalize(q)
+        if not wanted:
+            return items
+        out = []
+        for i in items:
+            name = normalize(" ".join(i.title.split(".")[:-3]))        # title + year, without tags
+            if wanted == name or wanted in name or name in wanted:
+                out.append(i)
+        return out
+
+    def movie_rss(self) -> list[Item]:
+        items = [i for src in self._film_sources() for i in self.films(src)]
+        items.sort(key=lambda i: i.published or "", reverse=True)
+        return items[:RSS_LIMIT]
 
     def rss(self) -> list[Item]:
         """The newest episodes of every series source (what Sonarr's RSS sync looks at)."""

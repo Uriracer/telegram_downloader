@@ -190,7 +190,7 @@ Detectiu Conan (1996) [tvdbid-72454]/Season 26/Detectiu Conan - S26E01 - 0887.mp
 - El títol del `.nfo` és provisional (el del nom del fitxer o el de TheTVDB, en anglès); els títols en
   català arribaran amb la fase 6.
 
-## 9. Sonarr
+## 9. Sonarr i Radarr
 
 Telegram Downloader es presenta a Sonarr com un **indexador Newznab** i un **client SABnzbd** (com 3Cat
 Downloader). Cal l'id de TheTVDB a les fonts i la clau de l'API (Configuració).
@@ -209,6 +209,14 @@ Sonarr els alterna i un episodi del 3Cat aniria a parar a Telegram Downloader (o
 - Per a l'anime (numeració scene de TheXEM), els episodis es busquen i s'anomenen pel número absolut.
 - Una font amb episodis que gestiona Sonarr ha de tenir el destí «A través de Sonarr / Radarr»: amb
   «Directament a la biblioteca» hi hauria dos camins per al mateix episodi.
+
+**Radarr** és igual: client SABnzbd amb Category `movies`, indexador amb Categories `2030,2040`, cadascun
+lligat al seu client. Les fonts de pel·lícules han de ser del tipus **Pel·lícules** i tenir la
+**Col·lecció de TMDB** (Opcions de la font; `39199` per al Detectiu Conan): «DC-Movie 22» és la 22a
+pel·lícula de la col·lecció per data d'estrena.
+
+Si els perfils de qualitat de Radarr demanen un idioma concret (per exemple *Spanish*), les pel·lícules en
+català poden quedar rebutjades: a **Settings → Profiles**, posa l'idioma del perfil a **Any** (o **Catalan**).
 
 ## Problemes habituals
 

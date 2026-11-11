@@ -29,8 +29,8 @@ NUMBERINGS = (ABSOLUTE, SEASONS)
 VIDEO_EXTS = {"mkv", "mp4", "avi", "m4v", "ts", "webm", "mov", "wmv", "mpg", "mpeg"}
 ARCHIVE_EXTS = {"rar", "zip", "7z"}
 
-# name.part2.rar | name.rar | name.7z.001 | name.zip.003 | name.mkv
-_EXT = re.compile(r"(?:\.part(?P<part>\d{1,3}))?\.(?P<ext>[A-Za-z0-9]{1,4})(?:\.(?P<vol>\d{3}))?$")
+# name.part2.rar | name_part2.rar (Animelliure) | name.rar | name.7z.001 | name.zip.003 | name.mkv
+_EXT = re.compile(r"(?:[._ -]part(?P<part>\d{1,3}))?\.(?P<ext>[A-Za-z0-9]{1,4})(?:\.(?P<vol>\d{3}))?$")
 _OLD_RAR = re.compile(r"\.r(?P<num>\d{2})$", re.I)          # name.r00, name.r01 … (name.rar is volume 1)
 _TDL = re.compile(r"^(?P<chat>\d{6,})_(?P<msg>\d+)_(?P<name>.+)$")
 
@@ -46,6 +46,8 @@ _ROMAN = re.compile(r"^(?:I|II|III|IV|V|VI)$")
 
 _SXXEYY = re.compile(r"(?<![A-Za-z0-9])[Ss](?P<s>\d{1,2})[ ._-]?[Ee](?P<e>\d{1,4})(?!\d)")
 _NXM = re.compile(r"(?<![A-Za-z0-9])(?P<s>\d{1,2})[xX](?P<e>\d{1,4})(?!\d)")
+# "DC-Movie 22", "DC Movie 22", "Animelliure_DC_Movie_01_v2…": a film, not an episode.
+_MOVIE = re.compile(r"(?<![A-Za-z0-9])(?:DC[ ._-]?)?(?:Movie|Pel[·.]?l[ií]cula|Pelicula)[ ._-]*(?P<n>\d{1,3})(?!\d)", re.I)
 _DC = re.compile(r"(?<![A-Za-z0-9])DC[ ._-]?(?P<n>\d{1,4})(?!\d)", re.I)
 _CONAN = re.compile(r"(?<![A-Za-z0-9])Conan[ ._-]+#?(?P<n>\d{1,4})(?!\d)", re.I)
 _EPWORD = re.compile(r"(?<![A-Za-z0-9])(?:Ep|Episodi|Episodio|Episode|Cap[ií]tol|Cap[ií]tulo|Cap)[ ._#-]*(?P<n>\d{1,4})(?!\d)",
@@ -62,6 +64,7 @@ class ParsedName:
     volume: int = 1                 # multipart archives: 1, 2, 3…
     archive_key: str = ""           # same for every volume of one archive
     absolute: Optional[int] = None
+    movie: Optional[int] = None     # "DC-Movie 22": the number of a film in a series of films
     season: Optional[int] = None
     episode: Optional[int] = None
     version: int = 1
@@ -143,7 +146,9 @@ def parse(file_name: str, numbering: str = ABSOLUTE) -> ParsedName:
 
     fields: dict[str, Any] = {}
     title = story = ""
-    if (m := _SXXEYY.search(work)):
+    if (m := _MOVIE.search(work)):
+        fields = {"movie": int(m["n"]), "rule": "Movie N"}
+    elif (m := _SXXEYY.search(work)):
         fields = {"season": int(m["s"]), "episode": int(m["e"]), "rule": "SxxEyy"}
         tail = work[m.end():]
         absm = re.match(r"\s*-\s*(\d{1,4})(?!\d)", tail)          # "S17E11 - 0501" (our own library names)
