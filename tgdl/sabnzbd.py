@@ -24,6 +24,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Callable, Optional
 
+from . import storage
 from .arr import Token
 from .db import (DOWNLOADED, DOWNLOADING, ERROR, EXTRACTED, EXTRACTING, IN_LIBRARY, NEW, QUEUED, Database)
 from .downloads import safe_name
@@ -32,6 +33,9 @@ log = logging.getLogger(__name__)
 
 SAB_VERSION = "4.5.0"
 CATEGORIES = ("tv", "movies", "sonarr", "radarr")
+#: Folders created in advance: Sonarr/Radarr's health check complains when the category folder
+#: SABnzbd reports does not exist yet ("this directory does not appear to exist inside the container").
+FOLDERS = ("tv", "movies")
 
 
 class SabError(Exception):
@@ -73,7 +77,19 @@ class SabnzbdService:
     def complete_dir(self) -> str:
         return str(self._settings().download_dir)
 
+    def ensure_folders(self) -> None:
+        """Create ``<download dir>/tv`` and ``/movies`` if missing, never while the NAS is missing."""
+        settings = self._settings()
+        if storage.storage_problem(settings):
+            return
+        for name in FOLDERS:
+            try:
+                (Path(self.complete_dir()) / name).mkdir(parents=True, exist_ok=True)
+            except OSError as exc:
+                log.warning("No s'ha pogut crear la carpeta de baixades «%s»: %s", name, exc)
+
     def config(self) -> dict[str, Any]:
+        self.ensure_folders()
         categories = [{"name": "*", "order": 0, "pp": "3", "script": "None", "dir": "", "priority": 0}]
         for i, name in enumerate(CATEGORIES, start=1):
             categories.append({"name": name, "order": i, "pp": "", "script": "Default", "dir": name,
@@ -222,6 +238,7 @@ class SabnzbdService:
 
     def resume(self) -> None:
         """At start-up: extract what finished downloading while the app was stopped."""
+        self.ensure_folders()
         for job in self.db.arr_jobs("active"):
             self._placer.deliver(job["nzo_id"])
 

@@ -301,3 +301,22 @@ def test_tmdb_collection_order() -> None:
     assert len(col.films) == 29 and col.film(1).year == 1997 and col.film(22).tmdb_id == 493006   # type: ignore[union-attr]
     assert col.film(22).titles["ca"] == "El detectiu Conan: El cas Zero"                     # type: ignore[union-attr]
     assert col.film(30) is None and col.number_of(493006) == 22
+
+
+def test_category_folders_exist_for_sonarr_and_radarr(ae: ArrEnv) -> None:
+    """Sonarr's health check: «the folder the client reports does not exist inside the container»."""
+    assert (ae.dl_dir / "tv").is_dir() and (ae.dl_dir / "movies").is_dir()       # created at start-up
+    (ae.dl_dir / "tv").rmdir()
+    cfg = ae.sab(mode="get_config")["config"]
+    assert cfg["misc"]["complete_dir"] == str(ae.dl_dir) and (ae.dl_dir / "tv").is_dir()
+
+
+def test_no_folders_without_the_nas(tmp_path: Path) -> None:
+    from types import SimpleNamespace
+
+    from tgdl.sabnzbd import SabnzbdService
+
+    dl = tmp_path / "nas" / "dl"
+    settings = SimpleNamespace(download_dir=str(dl), storage_sentinel=str(tmp_path / "nas" / ".tgdl-nas"))
+    SabnzbdService(None, lambda: settings, downloads=None, placer=None).ensure_folders()  # type: ignore[arg-type]
+    assert not (tmp_path / "nas").exists()
