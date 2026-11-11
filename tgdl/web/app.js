@@ -588,8 +588,10 @@ function sourceSummary(src, { detail = false } = {}) {
         detail ? h('h2', { text: src.title }) : h('h2', {}, h('button', { type: 'button', class: 'link-btn', text: src.title, onclick: () => openSource(src.id) })),
         h('div', { class: 'source-meta', text: meta }),
         h('div', { class: 'source-meta' }, indexingLine(src)),
+        placingLine(src),
         h('div', { class: 'counts' }, countPills(src))),
       h('div', { class: 'row' },
+        canPlace(src) ? h('button', { type: 'button', class: 'btn btn-small', text: 'Col·loca a la biblioteca', title: 'Descomprimeix els episodis baixats i els posa a la carpeta de la sèrie, amb el nom que entén Jellyfin', disabled: Boolean(src.placing), onclick: (ev) => placeSource(src, ev.currentTarget) }) : null,
         h('button', { type: 'button', class: 'btn btn-small btn-primary', text: 'Baixa el que falta', title: 'Posa a la cua la millor còpia de cada episodi que no és a la biblioteca', onclick: (ev) => queueMissing(src, ev.currentTarget) }),
         h('button', { type: 'button', class: 'btn btn-small', text: 'Indexa ara', disabled: Boolean(src.indexing), onclick: () => indexSource(src.id, false) }),
         detail ? h('button', { type: 'button', class: 'btn btn-small', text: 'Reindexa sencer', title: 'Torna a llegir tot el canal (detecta missatges esborrats)', disabled: Boolean(src.indexing), onclick: () => indexSource(src.id, true) }) : null,
@@ -629,6 +631,41 @@ function sourceOptionsForm(src) {
     h('p', { class: 'help', text: "La que llegeix Jellyfin. Buida = la que porta «[tvdbid-…]» dins la biblioteca de sèries. Els episodis que hi ha no es baixaran mai." })),
   h('div', {}, h('label', { class: 'check' }, auto, h('span', { text: "Refresca l'índex automàticament" }))));
   return h('details', { class: 'source-options' }, h('summary', { text: 'Opcions de la font' }), form);
+}
+
+function canPlace(src) {
+  return src.options?.kind === 'series' && ((src.counts || {}).downloaded || 0) > 0;
+}
+
+function placingLine(src) {
+  const p = src.placing;
+  if (p) {
+    return h('div', { class: 'source-meta row' }, h('span', { class: 'spinner', 'aria-hidden': 'true' }),
+      `Col·locant a la biblioteca… ${p.done + p.failed} de ${p.total}${p.current ? ` (${p.current})` : ''}`);
+  }
+  const last = src.placed;
+  if (!last) return null;
+  const text = `Última col·locació: ${plural(last.done, 'episodi', 'episodis')} a la biblioteca${last.failed ? `, ${last.failed} amb errors` : ''}.`;
+  if (!last.errors?.length) return h('div', { class: 'source-meta', text });
+  return h('details', { class: 'source-meta' }, h('summary', {}, text, ' ', pill('Errors', 'pill-err')),
+    h('ul', {}, last.errors.map((e) => h('li', {}, h('strong', { text: e.name }), `: ${e.error}`))));
+}
+
+async function placeSource(src, button) {
+  const n = (src.counts || {}).downloaded || 0;
+  const ok = await confirmDialog({
+    title: 'Col·locar a la biblioteca?',
+    message: `Hi ha ${plural(n, 'fitxer baixat', 'fitxers baixats')}. Es descomprimiran i cada episodi complet anirà a la carpeta de la sèrie (Season N/…), amb el seu .nfo. No se sobreescriu res del que ja hi ha.${state.settings?.delete_archives === false ? '' : ' Els arxius s\'esborraran quan el seu episodi ja sigui a la biblioteca.'}`,
+    okText: 'Col·loca',
+  });
+  if (!ok) return;
+  button.disabled = true;
+  try {
+    const res = await api(`sources/${src.id}/place`, { method: 'POST', body: {} });
+    if (res.source) state.sources.set(src.id, res.source);
+    if (!res.started) toast('Ja s\'hi estava treballant: es tornarà a mirar quan acabi.', { kind: 'info' });
+    renderSources();
+  } catch (e) { showError(e, "No s'ha pogut col·locar"); button.disabled = false; }
 }
 
 async function queueMissing(src, button) {
@@ -1185,7 +1222,8 @@ async function loadSettingsForm() {
 function fillSettingsForm(s) {
   const locked = new Set(s.locked || []);
   for (const el of settingsInputs()) {
-    el.value = s[el.dataset.field] ?? '';
+    if (el.dataset.kind === 'bool') el.checked = Boolean(s[el.dataset.field]);
+    else el.value = s[el.dataset.field] ?? '';
     el.disabled = locked.has(el.dataset.field);
     el.title = el.disabled ? 'Definit per una variable d\'entorn' : '';
   }
@@ -1205,7 +1243,8 @@ function readSettingsForm() {
   const out = {};
   for (const el of settingsInputs()) {
     if (el.disabled) continue;
-    out[el.dataset.field] = el.dataset.kind === 'int' ? Number(el.value) : el.value.trim();
+    if (el.dataset.kind === 'bool') out[el.dataset.field] = el.checked;
+    else out[el.dataset.field] = el.dataset.kind === 'int' ? Number(el.value) : el.value.trim();
   }
   if (!$('#set-api-id').disabled) out.telegram_api_id = $('#set-api-id').value.trim() || 0;
   if (!$('#set-api-hash').disabled && $('#set-api-hash').value.trim()) out.telegram_api_hash = $('#set-api-hash').value.trim();

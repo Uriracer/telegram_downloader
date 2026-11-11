@@ -310,6 +310,43 @@ def find_series_dir(library_root: str | Path, tvdb_id: int) -> Optional[Path]:
     return None
 
 
+def resolve_series_dir(settings: Any, options: Any) -> tuple[Optional[Path], Optional[str], bool]:
+    """The series folder of a source in the library: ``(folder, problem, chosen by hand)``.
+
+    The folder chosen in the source options wins; otherwise the one tagged ``[tvdbid-N]`` inside
+    the TV library. ``problem`` (Catalan) says why there is none.
+    """
+    from . import storage
+
+    if not getattr(settings, "library_tv_dir", "") and not options.library_folder:
+        return None, "No hi ha cap carpeta de la biblioteca de sèries a la configuració.", False
+    problem = storage.storage_problem(settings)
+    if problem:
+        return None, problem, bool(options.library_folder)
+    if options.library_folder:
+        folder = Path(options.library_folder)
+        if not folder.is_dir():
+            return None, f"No existeix la carpeta de la sèrie {folder}.", True
+        return folder, None, True
+    found = find_series_dir(settings.library_tv_dir, options.tvdb_id) if options.tvdb_id else None
+    if found is None:
+        return None, (f"No hi ha cap carpeta amb «[tvdbid-{options.tvdb_id}]» a {settings.library_tv_dir}: "
+                      "tria-la a «Opcions de la font»."), False
+    return found, None, False
+
+
+def season_dir(series_dir: Path, season: int) -> Path:
+    """The folder of a season: the existing one (``Season 1``, ``Season 01``, ``Temporada 1``…) or ``Season N``."""
+    try:
+        for entry in os.scandir(series_dir):
+            m = _SEASON_DIR.match(entry.name)
+            if m and entry.is_dir() and int(m[1]) == season:
+                return Path(entry.path)
+    except OSError:
+        pass
+    return series_dir / f"Season {season}"
+
+
 _SEASON_DIR = re.compile(r"^(?:Season|Temporada|Saison|Staffel|Stagione|Temp\.?|S)[ ._-]*(\d{1,3})$", re.I)
 
 

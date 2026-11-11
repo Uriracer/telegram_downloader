@@ -34,6 +34,7 @@ from .auth import COOKIE_NAME, SESSION_SECONDS, AuthManager, password_problem
 from .config import Settings, validation_errors
 from .db import DOWNLOADED, ERROR, IN_LIBRARY, NEW, QUEUED, STATES, Database, SourceOptions
 from .downloads import DownloadManager
+from .placement import Placer
 from .events import CLOSE, EventBroadcaster, sse
 from .guard import LocalGuardMiddleware
 from .naming import parse as parse_name
@@ -153,6 +154,11 @@ class QueueRequest(BaseModel):
     missing: bool = False
 
 
+class PlaceRequest(BaseModel):
+    #: At most this many episodes (a first try with a few); None = every one that is ready.
+    limit: Optional[int] = Field(default=None, ge=1, le=100_000)
+
+
 class UnqueueRequest(BaseModel):
     msg_ids: list[int] = Field(min_length=1, max_length=100_000)
 
@@ -199,6 +205,7 @@ def create_app(settings_store: Optional[SettingsStore] = None, *, db: Database, 
         finally:
             events.close()
             if manage_telegram:
+                await run_in_threadpool(dl.stop)
                 await run_in_threadpool(tg.stop)
 
     app = FastAPI(title="Telegram Downloader", version=APP_VERSION, lifespan=lifespan,
@@ -453,6 +460,8 @@ def create_app(settings_store: Optional[SettingsStore] = None, *, db: Database, 
         await call(require_source, source_id)
         if tg.indexing(source_id):
             raise HTTPException(status_code=409, detail="S'està indexant aquesta font; espera que acabi.")
+        if placer.busy(source_id):
+            raise HTTPException(status_code=409, detail="S'estan col·locant fitxers d'aquesta font; espera que acabi.")
         dl.forget_source(source_id)
         await call(db.delete_source, source_id)
         events.publish("source_deleted", {"id": source_id})
@@ -496,25 +505,12 @@ def create_app(settings_store: Optional[SettingsStore] = None, *, db: Database, 
         info: dict[str, Any] = {"root": settings.library_tv_dir, "folder": None, "problem": None, "episodes": 0}
         if src.options.kind != "series" or not (src.options.tvdb_id or src.options.library_folder):
             return {}, info
-        if not settings.library_tv_dir and not src.options.library_folder:
-            info["problem"] = "No hi ha cap carpeta de la biblioteca de sèries a la configuració."
-            return {}, info
-        problem = storage.storage_problem(settings)
-        if problem:
+        folder, problem, chosen = review.resolve_series_dir(settings, src.options)
+        if chosen:
+            info["chosen"] = True
+        if folder is None:
             info["problem"] = problem
             return {}, info
-        if src.options.library_folder:
-            folder: Optional[Path] = Path(src.options.library_folder)
-            info["chosen"] = True
-            if not folder.is_dir():
-                info["problem"] = f"No existeix la carpeta de la sèrie {folder}."
-                return {}, info
-        else:
-            folder = review.find_series_dir(settings.library_tv_dir, src.options.tvdb_id)
-            if folder is None:
-                info["problem"] = (f"No hi ha cap carpeta amb «[tvdbid-{src.options.tvdb_id}]» a "
-                                   f"{settings.library_tv_dir}: tria-la a «Opcions de la font».")
-                return {}, info
         found = review.scan_library(folder, show, src.options.numbering)
         info.update(folder=str(folder), episodes=len(found))
         return found, info
@@ -565,6 +561,30 @@ def create_app(settings_store: Optional[SettingsStore] = None, *, db: Database, 
             events.publish("source", result["source"])
 
     tg.after_index = auto_reconcile
+
+    # ------------------------------------------------------------- library (phase 4)
+    placer = Placer(store.get, db, show_getter=lambda src: source_show(src)[0], publish=events.publish,
+                    source_payload=tg.source_payload)
+    app.state.placer = placer
+    tg.payload_extra = lambda source_id: {"placing": placer.status(source_id), "placed": placer.last(source_id)}
+
+    def after_download(source_id: int, _msg_id: int) -> None:
+        """A file finished: sources placed directly get their complete episodes into the library."""
+        src = db.source(source_id)
+        if src is not None and src.options.kind == "series" and src.options.mode == "library":
+            placer.place(source_id)
+
+    dl.after_download = after_download
+
+    @app.post("/api/sources/{source_id}/place")
+    async def source_place(source_id: int, body: Optional[PlaceRequest] = None) -> dict[str, Any]:
+        await call(require_source, source_id)
+        src = db.source(source_id)
+        assert src is not None
+        if src.options.kind != "series":
+            raise HTTPException(status_code=422, detail="De moment només es col·loquen sèries a la biblioteca.")
+        started = placer.place(source_id, body.limit if body else None)
+        return {"started": started, "source": tg.source_payload(source_id)}
 
     @app.post("/api/sources/{source_id}/reconcile")
     async def source_reconcile(source_id: int) -> dict[str, Any]:

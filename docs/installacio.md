@@ -170,6 +170,26 @@ quedat. Si Telegram no respon en **Reconnecta si un fitxer no avança en** segon
 bloc; després de 8 intents seguits, el fitxer passa a «Error» amb el motiu i la cua continua. Si el NAS
 desapareix a mitja baixada, s'atura tot i es reprèn sol quan torna.
 
+## 8. Col·locar a la biblioteca (sèries)
+
+Un cop baixats tots els volums d'un episodi, l'aplicació el descomprimeix i en posa el vídeo a la
+carpeta de la sèrie, amb el nom que entén Jellyfin:
+
+```
+Detectiu Conan (1996) [tvdbid-72454]/Season 26/Detectiu Conan - S26E01 - 0887.mp4
+                                              /Detectiu Conan - S26E01 - 0887.nfo
+```
+
+- Amb el destí **Directament a la biblioteca** (Opcions de la font) es fa sol en acabar cada baixada.
+- Amb **Col·loca a la biblioteca** (a la font) es fa amb tot el que ja està baixat: també el que es va
+  importar de `tdl`.
+- Cal l'id de TheTVDB (per saber la temporada de cada número) i la carpeta de la sèrie.
+- No se sobreescriu res: si un episodi ja hi és amb un altre fitxer, surt a «Errors» i l'arxiu es queda.
+- Amb **Esborra els arxius** (Configuració → Biblioteca, activat per defecte), els `.rar` s'esborren quan
+  el seu episodi ja és a la biblioteca.
+- El títol del `.nfo` és provisional (el del nom del fitxer o el de TheTVDB, en anglès); els títols en
+  català arribaran amb la fase 6.
+
 ## Problemes habituals
 
 | Què veus | Per què | Què fer |
@@ -185,3 +205,5 @@ desapareix a mitja baixada, s'atura tot i es reprèn sol quan torna.
 | «Queda menys d'1 GB lliure al disc» | El disc de les baixades és ple | Allibera espai: les baixades continuen soles |
 | Un fitxer en «Error» amb «Telegram no ha respost…» | Connexió dolenta durant una estona | **Torna-ho a provar** a la llista de fitxers: continua on era |
 | «El missatge ja no existeix» | L'han esborrat del canal | **Reindexa sencer** el marca com a esborrat |
+| «Ja hi ha un fitxer diferent a la biblioteca» | L'episodi ja hi és (una altra versió) | Esborra'n un dels dos i torna a **Col·loca a la biblioteca** |
+| «No se sap la temporada de l'episodi» | Falta l'id de TheTVDB a la font | Posa'l a **Opcions de la font** |

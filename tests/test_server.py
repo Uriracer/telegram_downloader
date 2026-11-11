@@ -249,3 +249,15 @@ def test_queue_missing_unqueue_and_pause(env: Env) -> None:
     assert c.post("/api/downloads/pause", headers=ORIGIN).json()["paused"] is True
     assert env.harness.db.get_value("downloads_paused") is True
     assert c.post("/api/downloads/resume", headers=ORIGIN).json()["paused"] is False
+
+
+def test_place_endpoint_and_payload(env: Env) -> None:
+    c = env.client
+    login_telegram(env)
+    src = c.post("/api/sources", json={"chat_id": CONAN_CHAT}, headers=ORIGIN).json()
+    assert "placing" in src and "placed" in src
+    res = c.post(f"/api/sources/{src['id']}/place", json={"limit": 2}, headers=ORIGIN)
+    assert res.status_code == 200 and res.json()["started"] is True
+    assert env.app.state.placer.wait()
+    c.patch(f"/api/sources/{src['id']}", json={"options": {"kind": "movies"}}, headers=ORIGIN)
+    assert c.post(f"/api/sources/{src['id']}/place", headers=ORIGIN).status_code == 422

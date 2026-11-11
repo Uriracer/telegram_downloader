@@ -4,6 +4,23 @@ Format basat en [Keep a Changelog](https://keepachangelog.com/ca/1.1.0/); versio
 
 ## [0.1.0] — en desenvolupament
 
+### Fase 4: biblioteca (sèries)
+- **Col·locació a la biblioteca**: cada episodi baixat (tots els volums d'un arxiu, o un vídeo sol) es
+  descomprimeix amb `7zz` i el vídeo va a `<sèrie>/Season N/<Sèrie> - S26E01 - 0887.mp4` (número absolut
+  amb la numeració absoluta), el format que ja hi havia; la carpeta de temporada es crea si cal.
+- `.nfo` de cada episodi: títol (el del nom del fitxer, «DC-1035 (Escac i mat)», o el de TheTVDB),
+  temporada, episodi, data d'emissió i número absolut; marcat amb `<!-- tgdl -->` perquè la fase 6 en
+  pugui posar el títol en català. Llegible per tothom, com els vídeos.
+- Els volums recuperen el nom original (enllaços) abans de descomprimir: els de `tdl` porten un prefix i
+  7-Zip no trobaria el `.part2.rar`.
+- **No se sobreescriu mai res**: si l'episodi ja hi és amb un fitxer diferent, s'avisa. Un arxiu amb dos
+  vídeos, amb contrasenya o al qual falta un volum es deixa baixat amb el motiu.
+- Els arxius s'esborren quan el seu episodi ja és a la biblioteca (opció *Esborra els arxius*).
+- Automàtic en acabar de baixar per a les fonts amb destí «Directament a la biblioteca»; per a la resta,
+  botó **Col·loca a la biblioteca** a la font (`POST /api/sources/{id}/place`, amb `limit` per provar-ho
+  amb pocs). La targeta de la font mostra el progrés i els errors de l'última col·locació.
+- Baixades: en aturar l'aplicació ja no es comença cap fitxer nou.
+
 ### Fase 3: baixades
 - **Cua de baixades**: «Baixa el que falta» posa a la cua la millor còpia completa de cada episodi que no és
   a la biblioteca (un sol cop cada volum penjat dues vegades); també fitxer a fitxer. Pel·lícules i altres:

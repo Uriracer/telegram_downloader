@@ -419,6 +419,19 @@ class Database:
     def finish_download(self, source_id: int, msg_id: int, local_path: str) -> bool:
         return self.mark_downloaded(source_id, msg_id, local_path, only_from=(DOWNLOADING,))
 
+    def mark_in_library(self, source_id: int, msg_ids: Iterable[int], local_path: str) -> int:
+        """The episode of these messages is in the library at ``local_path`` (every copy of every volume)."""
+        allowed = (NEW, QUEUED, DOWNLOADED, EXTRACTING, EXTRACTED, ERROR)
+        marks = ",".join("?" * len(allowed))
+        changed = 0
+        with self.transaction() as conn:
+            for mid in msg_ids:
+                changed += conn.execute(
+                    f"UPDATE messages SET state=?, local_path=?, error=NULL, updated_at=? "
+                    f"WHERE source_id=? AND msg_id=? AND state IN ({marks})",
+                    [IN_LIBRARY, local_path, utcnow(), source_id, mid, *allowed]).rowcount
+        return changed
+
     def local_paths(self, source_id: int) -> set[str]:
         return {r[0] for r in self.query("SELECT local_path FROM messages WHERE source_id=? AND local_path IS NOT NULL",
                                          (source_id,))}

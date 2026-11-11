@@ -226,6 +226,7 @@ class DownloadManager:
         self._blocked: Optional[str] = None
         self._last_publish = 0.0
         self._started = False
+        self._stopping = False
         #: Called with (source_id, msg_id) after a file is downloaded (phase 4: extraction).
         self.after_download: Optional[Callable[[int, int], None]] = None
 
@@ -235,6 +236,14 @@ class DownloadManager:
             return
         self._started = True
         self.telegram.submit(self._run)
+
+    def stop(self, timeout: float = 10.0) -> None:
+        """Before Telegram disconnects: start nothing new, and stop the downloads where they are.
+
+        They stay ``downloading`` and are resumed on the next start.
+        """
+        self._stopping = True
+        self._cancel(lambda _job: True, None, timeout=timeout)
 
     def wake(self) -> None:
         loop = self.telegram.loop
@@ -289,7 +298,7 @@ class DownloadManager:
         with self._lock:
             return sum(1 for j in self._jobs.values() if source_id is None or j.source_id == source_id)
 
-    def _cancel(self, match: Callable[[Job], bool], to_state: str, timeout: float = 10.0) -> int:
+    def _cancel(self, match: Callable[[Job], bool], to_state: Optional[str], timeout: float = 10.0) -> int:
         """Stop the matching downloads and wait until they have recorded where they stopped."""
         with self._lock:
             jobs = [j for j in self._jobs.values() if match(j)]
@@ -351,7 +360,7 @@ class DownloadManager:
             if blocked:
                 log.warning("Baixades aturades: %s", blocked)
             await asyncio.to_thread(self._publish_status)
-        if self._paused or blocked:
+        if self._paused or blocked or self._stopping:
             return
         slots = int(settings.max_parallel_files) - len(self._jobs)
         if slots <= 0:
