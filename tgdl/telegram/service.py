@@ -85,6 +85,8 @@ class TelegramService:
         self._last_me_refresh = 0.0
         #: Called (in a worker thread) with the source id after each index run, e.g. to reconcile the library.
         self.after_index: Optional[Callable[[int], None]] = None
+        #: Extra fields for :meth:`source_payload` (e.g. the library placement in progress).
+        self.payload_extra: Optional[Callable[[int], dict[str, Any]]] = None
 
     # =================================================================== thread / loop
     def start(self) -> None:
@@ -378,6 +380,8 @@ class TelegramService:
             return None
         data = src.to_dict()
         data["indexing"] = self.indexing(source_id)
+        if self.payload_extra is not None:
+            data.update(self.payload_extra(source_id))
         return data
 
     def _publish_source(self, source_id: int) -> None:

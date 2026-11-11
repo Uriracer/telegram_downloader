@@ -248,6 +248,10 @@ def _serve(args: argparse.Namespace, log_file: Optional[Path], instance: Any, da
         events.close()
         server.should_exit = True
         try:
+            downloads.stop(timeout=STOP_TIMEOUT / 2)
+        except Exception:
+            log.exception("Error en aturar les baixades")
+        try:
             telegram.stop(timeout=STOP_TIMEOUT)
         except Exception:
             log.exception("Error en aturar Telegram")

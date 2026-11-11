@@ -69,6 +69,9 @@ class Settings:
     chunks_per_file: int = 4
     #: Seconds without progress before a download is reconnected and resumed.
     stall_seconds: int = 90
+    # ---- library
+    #: Delete the archives once their episode is in the library.
+    delete_archives: bool = True
     # ---- server
     server_port: int = 8766
     api_key: str = field(default_factory=_new_api_key)

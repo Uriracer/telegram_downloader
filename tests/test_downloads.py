@@ -245,3 +245,23 @@ def test_safe_names_and_collisions(tmp_path: Path) -> None:
     (tmp_path / "DC-1.rar").write_bytes(b"")
     assert target_path(tmp_path, "DC-1.rar", 42).name == "DC-1 [42].rar"
     assert target_path(tmp_path, "DC-2.rar", 42).name == "DC-2.rar"
+
+
+def test_stop_starts_nothing_new_and_keeps_the_state(tmp_path: Path) -> None:
+    d = DL(tmp_path, chunks_per_file=1, max_parallel_files=1)
+    try:
+        d.gw.block_delay = 0.2
+        d.manager.start()
+        d.queue(MSG, 4)
+        # Stop once the first block is on disk (before that there is no .part.json to keep).
+        wait_for(lambda: d.manager.status()["active"] and d.manager.status()["active"][0]["bytes_done"] >= BLOCK)
+        d.manager.stop()
+        wait_for(lambda: d.manager.active() == 0)
+        d.manager.wake()
+        import time
+        time.sleep(0.3)
+        assert d.manager.active() == 0
+        assert d.msg(MSG)["state"] == "downloading" and d.msg(4)["state"] == QUEUED   # resumed on the next start
+        assert PartState.load(d.folder / f".{MSG}.part.json", SIZE) is not None
+    finally:
+        d.close()
