@@ -49,6 +49,7 @@ from .telegram.gateway import (ChatUnavailable, FloodWait, LoginError, NotAuthor
 from .telegram.service import TelegramService
 from .tmdb import TmdbClient, TmdbError
 from .tvdb import Show, TvdbClient, TvdbError
+from .wikipedia import WikipediaClient, WikipediaError
 
 log = logging.getLogger(__name__)
 
@@ -570,8 +571,21 @@ def create_app(settings_store: Optional[SettingsStore] = None, *, db: Database, 
     tg.after_index = auto_reconcile
 
     # ------------------------------------------------------------- library (phase 4)
+    wiki = WikipediaClient(db)
+    app.state.wikipedia = wiki
+
+    def source_titles(src: Any) -> Optional[dict[int, Any]]:
+        """Catalan titles of a source's episodes (Wikipedia), or None."""
+        if not src.options.wikipedia_list:
+            return None
+        try:
+            return wiki.episodes(src.options.wikipedia_list)
+        except WikipediaError as exc:
+            log.warning("Font «%s»: %s", src.title, exc)
+            return None
+
     placer = Placer(store.get, db, show_getter=lambda src: source_show(src)[0], publish=events.publish,
-                    source_payload=tg.source_payload)
+                    source_payload=tg.source_payload, titles_getter=source_titles)
     app.state.placer = placer
     tg.payload_extra = lambda source_id: {"placing": placer.status(source_id), "placed": placer.last(source_id)}
 
@@ -752,6 +766,30 @@ def create_app(settings_store: Optional[SettingsStore] = None, *, db: Database, 
 
     for sab_path in ("/sabnzbd/api", "/api"):
         app.add_api_route(sab_path, sabnzbd, methods=["GET", "POST"], include_in_schema=False)
+
+    def run_titles(source_id: int) -> dict[str, Any]:
+        from .placement import retitle_nfos
+
+        src = db.source(source_id)
+        if src is None:
+            raise HTTPException(status_code=404, detail="Aquesta font no existeix.")
+        if not src.options.wikipedia_list:
+            raise HTTPException(status_code=422, detail="Posa la llista d'episodis de la Viquipèdia a «Opcions de la font».")
+        try:
+            entries = wiki.episodes(src.options.wikipedia_list, refresh=True)
+        except WikipediaError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        folder, problem, _chosen = review.resolve_series_dir(store.get(), src.options)
+        if folder is None:
+            raise HTTPException(status_code=409, detail=problem)
+        result = retitle_nfos(folder, entries)
+        log.info("Títols en català (%s): %d .nfo actualitzats, %d ja hi eren, %d sense títol a la Viquipèdia",
+                 src.title, result["updated"], result["unchanged"], len(result["missing"]))
+        return {**result, "missing": result["missing"][:50], "wikipedia_episodes": len(entries)}
+
+    @app.post("/api/sources/{source_id}/titles")
+    async def source_titles_update(source_id: int) -> dict[str, Any]:
+        return await call(run_titles, source_id)
 
     @app.post("/api/sources/{source_id}/place")
     async def source_place(source_id: int, body: Optional[PlaceRequest] = None) -> dict[str, Any]:

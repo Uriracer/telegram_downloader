@@ -30,6 +30,7 @@ import logging
 import os
 import shutil
 import subprocess
+import xml.etree.ElementTree as ET
 import threading
 import time
 import zipfile
@@ -79,8 +80,11 @@ def episode_basename(show: str, ref: review.EpisodeRef, numbering: str) -> str:
     return base
 
 
-def episode_title(release: review.Release) -> str:
-    """The title for the .nfo: the one in the file name (Catalan), else TheTVDB's; with the number."""
+def episode_title(release: review.Release, entry: Any = None) -> str:
+    """The title for the .nfo: Wikipedia's (Catalan), else the file name's, else TheTVDB's; with the number."""
+    ref = release.ref
+    if entry is not None and ref is not None and ref.absolute is not None:
+        return f"{ref.absolute}. {entry.title}"           # «887. En Kaito Kid i la caixa secreta. Primera part»
     title = release.parsed.title.strip()
     part = release.parsed.story_part.strip().strip("()")
     if title or release.ref is None or release.ref.tvdb is None:
@@ -88,7 +92,6 @@ def episode_title(release: review.Release) -> str:
             title = f"{title} ({part})".strip()
     else:
         title = release.ref.tvdb.title   # TheTVDB's already says «(Part One)»
-    ref = release.ref
     number = ref.absolute if ref is not None and ref.absolute is not None else None
     if number is not None:
         if not title or title.startswith("("):
@@ -97,20 +100,72 @@ def episode_title(release: review.Release) -> str:
     return title or (ref.label if ref is not None else release.name)
 
 
-def nfo_xml(show: str, release: review.Release) -> str:
+def nfo_xml(show: str, release: review.Release, entry: Any = None) -> str:
+    """The episode .nfo; ``entry`` (:class:`tgdl.wikipedia.Entry`) gives the Catalan title and plot."""
     ref = release.ref
     assert ref is not None
     lines = ['<?xml version="1.0" encoding="utf-8" standalone="yes"?>', "<episodedetails>",
-             f"  <title>{escape(episode_title(release))}</title>",
+             f"  <title>{escape(episode_title(release, entry))}</title>",
              f"  <showtitle>{escape(show)}</showtitle>",
              f"  <season>{ref.season}</season>",
              f"  <episode>{ref.episode}</episode>"]
+    if entry is not None and entry.plot:
+        lines.append(f"  <plot>{escape(entry.plot)}</plot>")
     if ref.tvdb is not None and ref.tvdb.air_date:
         lines.append(f"  <aired>{escape(ref.tvdb.air_date)}</aired>")
     if ref.absolute is not None:
         lines.append(f'  <uniqueid type="absolute">{ref.absolute}</uniqueid>')
     lines += [f"  {NFO_MARK}", "</episodedetails>", ""]
     return "\n".join(lines)
+
+
+def retitle_nfos(series_dir: Path, entries: dict[int, Any]) -> dict[str, Any]:
+    """Put the Catalan title and plot into the .nfo files *we* wrote (``<!-- tgdl -->``) in a series folder.
+
+    Others (written by hand, by older scripts or by Jellyfin) are never touched. Returns counts.
+    """
+    out: dict[str, Any] = {"updated": 0, "unchanged": 0, "missing": [], "skipped": 0}
+    for nfo in sorted(series_dir.rglob("*.nfo")):
+        try:
+            text = nfo.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if NFO_MARK not in text:
+            out["skipped"] += 1
+            continue
+        try:
+            root = ET.fromstring(text.encode("utf-8"), parser=ET.XMLParser(target=ET.TreeBuilder(insert_comments=True)))
+        except ET.ParseError:
+            continue
+        number_el = root.find("uniqueid[@type='absolute']")
+        if number_el is None or not (number_el.text or "").strip().isdigit():
+            continue
+        number = int((number_el.text or "").strip())
+        entry = entries.get(number)
+        if entry is None:
+            out["missing"].append(number)
+            continue
+        title_el = root.find("title")
+        if title_el is None:
+            title_el = ET.SubElement(root, "title")
+        new_title = f"{number}. {entry.title}"
+        plot_el = root.find("plot")
+        if title_el.text == new_title and (not entry.plot or (plot_el is not None and plot_el.text == entry.plot)):
+            out["unchanged"] += 1
+            continue
+        title_el.text = new_title
+        if entry.plot:
+            if plot_el is None:
+                plot_el = ET.Element("plot")
+                root.insert(list(root).index(title_el) + 1, plot_el)
+            plot_el.text = entry.plot
+        ET.indent(root, space="  ")
+        body = ET.tostring(root, encoding="unicode")
+        atomic_write_bytes(nfo, ('<?xml version="1.0" encoding="utf-8" standalone="yes"?>\n' + body + "\n").encode("utf-8"))
+        _readable(nfo)
+        out["updated"] += 1
+    out["missing"] = sorted(set(out["missing"]))
+    return out
 
 
 # --------------------------------------------------------------------------- extraction
@@ -234,11 +289,13 @@ def ready_releases(messages: Iterable[dict[str, Any]], numbering: str, show: Any
 class Placer:
     def __init__(self, settings_getter: Callable[[], Any], db: Database, *,
                  show_getter: Callable[[Any], Any], publish: Callable[[str, Any], None],
+                 titles_getter: Optional[Callable[[Any], Optional[dict[int, Any]]]] = None,
                  source_payload: Optional[Callable[[int], Any]] = None,
                  seven_zip: Optional[Callable[[], Optional[str]]] = None) -> None:
         self._settings = settings_getter
         self.db = db
         self._show = show_getter
+        self._titles = titles_getter or (lambda src: None)
         self._publish = publish
         self._payload = source_payload
         self._seven_zip = seven_zip or _find_seven_zip
@@ -442,7 +499,9 @@ class Placer:
                 move(video, target)
             nfo = target.with_suffix(".nfo")
             if not nfo.exists() or NFO_MARK in nfo.read_text(encoding="utf-8", errors="replace"):
-                atomic_write_bytes(nfo, nfo_xml(show, rel).encode("utf-8"))
+                entries = self._titles(src) or {}
+                entry = entries.get(ref.absolute) if ref.absolute is not None else None
+                atomic_write_bytes(nfo, nfo_xml(show, rel, entry).encode("utf-8"))
                 _readable(nfo)
             self.db.mark_in_library(src.id, rel.msg_ids, str(target))
             log.info("A la biblioteca: %s/%s", season.name, target.name)

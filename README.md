@@ -20,7 +20,7 @@ reprenien, fitxers que es tornaven a baixar i un NAS que de vegades no estava mu
 | 3 | ✅ | Baixada robusta: represa per blocs, *watchdog*, paral·lelisme, Premium, velocitat i temps restant |
 | 4 | ✅ | Descompressió (RAR5, multipart, ZIP, 7z) i col·locació de sèries a la biblioteca amb `.nfo` |
 | 5 | ✅ | Sonarr i Radarr (indexador Newznab + client SABnzbd), provats amb els reals; pel·lícules per col·lecció de TMDB |
-| 6 | ⏳ | Títols en català (Viquipèdia) i verificació per títols |
+| 6 | ✅ | Títols i sinopsis en català de la Viquipèdia als `.nfo` dels episodis |
 
 ## Inici ràpid (Docker Compose)
 

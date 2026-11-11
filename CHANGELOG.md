@@ -4,6 +4,16 @@ Format basat en [Keep a Changelog](https://keepachangelog.com/ca/1.1.0/); versio
 
 ## [0.1.0] — en desenvolupament
 
+### Fase 6: títols en català
+- **Viquipèdia**: la font d'episodis pot indicar la seva llista d'episodis de la Viquipèdia en català
+  (`wikipedia_list`, «Llista d'episodis d'El detectiu Conan»). Se'n llegeixen també les pàgines de temporades
+  que hi enllaça, i de cada episodi el títol i la sinopsi, pel número japonès (el dels fitxers i de TheTVDB).
+  Es desa a la base de dades una setmana.
+- Els `.nfo` nous porten «887. En Kaito Kid i la caixa secreta. Primera part» i la sinopsi.
+- **Posa els títols en català** (`POST /api/sources/{id}/titles`) actualitza els `.nfo` que ja ha creat
+  l'aplicació (marca `<!-- tgdl -->`); els altres no es toquen mai.
+- Al servidor: 154 `.nfo` actualitzats (887–1040), els 887 anteriors intactes.
+
 ### Fase 5: Radarr (pel·lícules)
 - **Pel·lícules**: «DC-Movie 22», «DC Movie 24», «Animelliure_DC_Movie_01_v2…» es reconeixen (número de
   pel·lícula) i els volums `_part1.rar` (amb guió baix) s'agrupen bé: abans cada volum semblava un arxiu.

@@ -120,6 +120,7 @@ class SourceOptions:
     numbering: str = "seasons"      # seasons (1x05 = S01E05) | absolute (anime: 13x501 = episode 501)
     library_folder: str = ""        # folder of the series in the library ("" = the one tagged [tvdbid-N])
     tmdb_collection: int = 0        # films: TMDB collection, film N = its N-th by release date (Conan: 39199)
+    wikipedia_list: str = ""        # Catalan Wikipedia episode list ("Llista d'episodis d'El detectiu Conan")
 
     @classmethod
     def from_dict(cls, data: Any) -> "SourceOptions":
@@ -138,6 +139,9 @@ class SourceOptions:
         tvdb = data.get("tvdb_id")
         if isinstance(tvdb, (int, str)) and not isinstance(tvdb, bool) and str(tvdb).strip().isdigit():
             out.tvdb_id = int(str(tvdb).strip())
+        wiki = data.get("wikipedia_list")
+        if isinstance(wiki, str) and len(wiki) <= 300 and "\0" not in wiki:
+            out.wikipedia_list = wiki.strip()
         coll = data.get("tmdb_collection")
         if isinstance(coll, (int, str)) and not isinstance(coll, bool) and str(coll).strip().isdigit():
             out.tmdb_collection = int(str(coll).strip())

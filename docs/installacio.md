@@ -190,7 +190,15 @@ Detectiu Conan (1996) [tvdbid-72454]/Season 26/Detectiu Conan - S26E01 - 0887.mp
 - El títol del `.nfo` és provisional (el del nom del fitxer o el de TheTVDB, en anglès); els títols en
   català arribaran amb la fase 6.
 
-## 9. Sonarr i Radarr
+## 9. Títols en català
+
+A **Opcions de la font**, posa a **Llista d'episodis a la Viquipèdia** el nom de la pàgina
+(`Llista d'episodis d'El detectiu Conan`). Els episodis que es col·loquin a partir d'ara porten el títol i la
+sinopsi en català, i **Posa els títols en català** (a la font) els posa als que ja s'havien col·locat. Només
+es toquen els `.nfo` que ha creat aquesta aplicació. Després, a Jellyfin, fes **Actualitza les metadades** de
+la sèrie perquè els torni a llegir.
+
+## 10. Sonarr i Radarr
 
 Telegram Downloader es presenta a Sonarr com un **indexador Newznab** i un **client SABnzbd** (com 3Cat
 Downloader). Cal l'id de TheTVDB a les fonts i la clau de l'API (Configuració).
